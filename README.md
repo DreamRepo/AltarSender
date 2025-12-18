@@ -29,8 +29,8 @@ A graphical user interface (GUI) built with Python and CustomTkinter to send exp
 
 1. Clone or download the repository:
    ```bash
-   git clone https://github.com/WilliamGaultier/Altar.git
-   cd Altar/AltarSender
+   git clone https://github.com/DreamRepo/AltarSender.git
+   cd AltarSender
    ```
 
 2. Create and activate a virtual environment (recommended):
@@ -331,5 +331,5 @@ The executable will be in the `dist/` folder: `dist/AltarSender.app` (or `dist/A
 
 ## Related
 
-- [AltarDocker](../AltarDocker) — Deploy MongoDB, MinIO, Omniboard, and AltarExtractor
-- [AltarExtractor](../AltarExtractor) — Browse and filter Sacred experiments in a web UI
+- [AltarDocker](https://github.com/DreamRepo/AltarDocker) — Deploy MongoDB, MinIO, Omniboard, and AltarExtractor
+- [AltarExtractor](https://github.com/DreamRepo/AltarExtractor) — Browse and filter Sacred experiments in a web UI
