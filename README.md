@@ -331,18 +331,26 @@ The executable will be in the `dist/` folder: `dist/AltarSender.app` (or `dist/A
 
 ## Automated Builds (GitHub Actions)
 
-This repository includes a GitHub Actions workflow that automatically builds a Windows executable.
+This repository includes a GitHub Actions workflow that automatically builds executables for **Windows**, **Linux**, and **macOS**.
 
 ### Downloading the Latest Build
 
 1. Go to the [Actions tab](../../actions) in this repository
-2. Click on the latest successful **Build Windows Executable** workflow run
-3. Scroll down to **Artifacts** and download **AltarSender-Windows**
-4. Extract the ZIP file to get `AltarSender.exe`
+2. Click on the latest successful **Build Executables** workflow run
+3. Scroll down to **Artifacts** and download the version for your platform:
+   - **AltarSender-Windows.exe** — Windows executable
+   - **AltarSender-Linux** — Linux executable
+   - **AltarSender-macOS** — macOS executable
+4. Extract the ZIP file to get the executable
+
+> **Note:** On Linux/macOS, you may need to make the file executable:
+> ```bash
+> chmod +x AltarSender-Linux   # or AltarSender-macOS
+> ```
 
 ### Creating a Release
 
-To publish a versioned release with the executable attached:
+To publish a versioned release with executables attached:
 
 1. Go to the [Releases page](../../releases) and click **Draft a new release**
 2. Create a new tag (e.g., `v1.0.0`) and give the release a title
@@ -350,17 +358,17 @@ To publish a versioned release with the executable attached:
 4. Click **Publish release**
 
 The GitHub Action will automatically:
-- Build the Windows executable
-- Attach `AltarSender.exe` to the release
+- Build executables for all three platforms
+- Attach all executables to the release
 
-Users can then download the executable directly from the release page.
+Users can then download the executable for their platform directly from the release page.
 
 ### Manual Workflow Trigger
 
 You can also manually trigger a build:
 
 1. Go to the [Actions tab](../../actions)
-2. Select **Build Windows Executable** workflow
+2. Select **Build Executables** workflow
 3. Click **Run workflow** → **Run workflow**
 
 ---
