@@ -329,6 +329,42 @@ The executable will be in the `dist/` folder: `dist/AltarSender.app` (or `dist/A
 
 ---
 
+## Automated Builds (GitHub Actions)
+
+This repository includes a GitHub Actions workflow that automatically builds a Windows executable.
+
+### Downloading the Latest Build
+
+1. Go to the [Actions tab](../../actions) in this repository
+2. Click on the latest successful **Build Windows Executable** workflow run
+3. Scroll down to **Artifacts** and download **AltarSender-Windows**
+4. Extract the ZIP file to get `AltarSender.exe`
+
+### Creating a Release
+
+To publish a versioned release with the executable attached:
+
+1. Go to the [Releases page](../../releases) and click **Draft a new release**
+2. Create a new tag (e.g., `v1.0.0`) and give the release a title
+3. Add release notes describing changes
+4. Click **Publish release**
+
+The GitHub Action will automatically:
+- Build the Windows executable
+- Attach `AltarSender.exe` to the release
+
+Users can then download the executable directly from the release page.
+
+### Manual Workflow Trigger
+
+You can also manually trigger a build:
+
+1. Go to the [Actions tab](../../actions)
+2. Select **Build Windows Executable** workflow
+3. Click **Run workflow** → **Run workflow**
+
+---
+
 ## Related
 
 - [AltarDocker](https://github.com/DreamRepo/AltarDocker) — Deploy MongoDB, MinIO, Omniboard, and AltarExtractor

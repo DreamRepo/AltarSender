@@ -1,8 +1,16 @@
 import hashlib
 import re
+from datetime import datetime
 
 # Alphabet Crockford sans I/L/O/U
 _ALPH = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
+
+
+def _get_current_timestamp_str() -> str:
+    """Return current timestamp in format YYYYMMDDTHHMMSS."""
+    now = datetime.now()
+    return now.strftime("%Y%m%dT%H%M%S")
+
 
 def extract_timestamp_str(s: str):
     rx = re.compile(
@@ -11,7 +19,7 @@ def extract_timestamp_str(s: str):
     )
     m = rx.search(s)
     if not m:
-        return None
+        return _get_current_timestamp_str()
     y = int(m.group("year")); mo = int(m.group("month")); d = int(m.group("day"))
     h = int(m.group("hour")); mi = int(m.group("minute"))
     se = int(m.group("second")) if m.group("second") else 0
@@ -40,9 +48,10 @@ def make_compact_uid_b32(name: str, length=7) -> str:
     )
     m = rx.search(name)
     if not m:
-        raise ValueError("Timecode invalide ou mal formaté")
-    sec = m.group("second") or "00"
-    ts = f"{m.group('year')}{m.group('month')}{m.group('day')}T{m.group('hour')}{m.group('minute')}{sec}"
+        ts = _get_current_timestamp_str()
+    else:
+        sec = m.group("second") or "00"
+        ts = f"{m.group('year')}{m.group('month')}{m.group('day')}T{m.group('hour')}{m.group('minute')}{sec}"
     return f"{short_hash_b32(name, length)}-{ts}"
 
 

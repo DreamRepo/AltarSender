@@ -119,6 +119,7 @@ class AppView(ctk.CTk):
                 "port": data.get("port", ""),
                 "user": data.get("user", ""),
                 "db": data.get("db", ""),
+                "auth_source": data.get("auth_source", ""),
                 "tls": data.get("tls", 0),
                 "password": self.mongo_section.get_password(),
             },

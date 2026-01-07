@@ -10,14 +10,19 @@ class ClientWithAddress(MongoClient):
         super().__init__(*args, **kwargs)
         self.address_string = address_string
 
-def _build_uri(host: str, port: str, user: str, pwd: str, db: str) -> str:
+def _build_uri(host: str, port: str, user: str, pwd: str, db: str, auth_source: str = "") -> str:
     host = host or "localhost"
     port = port or "27017"
     db   = db or "admin"
     auth = ""
     if user and pwd:
         auth = f"{urllib.parse.quote_plus(user)}:{urllib.parse.quote_plus(pwd)}@"
-    return f"mongodb://{auth}{host}:{port}/{db}"
+    # Build query params
+    params = []
+    if auth_source:
+        params.append(f"authSource={auth_source}")
+    query = ("?" + "&".join(params)) if params else ""
+    return f"mongodb://{auth}{host}:{port}/{db}{query}"
 
 def mongo_client_from_inputs(
     use_uri: bool,
@@ -27,6 +32,7 @@ def mongo_client_from_inputs(
     user: str,
     pwd: str,
     db: str,
+    auth_source: str,
     tls: bool,
 ) -> ClientWithAddress:
     if use_uri:
@@ -38,7 +44,7 @@ def mongo_client_from_inputs(
             address_string=uri
         )
     else:
-        built_uri = _build_uri(host, port, user, pwd, db)
+        built_uri = _build_uri(host, port, user, pwd, db, auth_source)
         client = ClientWithAddress(
             built_uri,
             tls=bool(tls),
@@ -63,23 +69,25 @@ def build_mongo_url_from_payload(mongo_payload: dict) -> tuple[str, str]:
     """Return (mongo_url, db_name) from a UI payload.
 
     Supports either a full URI (with optional tls, authSource additions) or
-    host/port/user/password fields. Always includes authSource to target the
-    provided database for authentication.
+    host/port/user/password fields. Uses the provided authSource for authentication,
+    or falls back to the database name if not specified.
     """
     if not isinstance(mongo_payload, dict) or not mongo_payload:
         raise ValueError("Mongo connection incorrect")
 
     use_uri = bool(mongo_payload.get("use_uri", 0))
     db_name = (mongo_payload.get("db") or "admin")
+    # Use explicit auth_source if provided, otherwise fall back to db_name
+    auth_source = (mongo_payload.get("auth_source") or "").strip() or db_name
 
     if use_uri:
         mongo_url = (mongo_payload.get("uri") or "").strip()
         if not mongo_url:
             raise ValueError("Empty Mongo URI")
-        # Append authSource if missing and db provided
-        if "authSource=" not in mongo_url and db_name:
+        # Append authSource if missing
+        if "authSource=" not in mongo_url and auth_source:
             sep = "&" if "?" in mongo_url else "?"
-            mongo_url = f"{mongo_url}{sep}authSource={db_name}"
+            mongo_url = f"{mongo_url}{sep}authSource={auth_source}"
         # Append tls for non-SRV if requested
         if bool(mongo_payload.get("tls", 0)) and not mongo_url.startswith("mongodb+srv://") and "tls=" not in mongo_url:
             sep = "&" if "?" in mongo_url else "?"
@@ -92,7 +100,9 @@ def build_mongo_url_from_payload(mongo_payload: dict) -> tuple[str, str]:
     user = (mongo_payload.get("user") or "").strip()
     pwd = (mongo_payload.get("password") or "").strip()
     auth = f"{urllib.parse.quote_plus(user)}:{urllib.parse.quote_plus(pwd)}@" if user and pwd else ""
-    params: list[str] = [f"authSource={db_name}"]
+    params: list[str] = []
+    if auth_source:
+        params.append(f"authSource={auth_source}")
     if bool(mongo_payload.get("tls", 0)):
         params.append("tls=true")
     query = ("?" + "&".join(params)) if params else ""

@@ -35,14 +35,17 @@ class MongoSection(ctk.CTkFrame):
         self.user_entry = ctk.CTkEntry(self, placeholder_text="optional")
         ctk.CTkLabel(self, text="Password").grid(row=6, column=1, sticky="w", padx=(6, 12))
         self.pass_entry = ctk.CTkEntry(self, placeholder_text="optional", show="•")
-        ctk.CTkLabel(self, text="Database").grid(row=8, column=0, columnspan=2, sticky="w", padx=12)
-        self.db_entry = ctk.CTkEntry(self, placeholder_text="e.g., admin")
+        ctk.CTkLabel(self, text="Database").grid(row=8, column=0, sticky="w", padx=12)
+        self.db_entry = ctk.CTkEntry(self, placeholder_text="e.g., sacred")
+        ctk.CTkLabel(self, text="Auth Source").grid(row=8, column=1, sticky="w", padx=(6, 12))
+        self.auth_source_entry = ctk.CTkEntry(self, placeholder_text="e.g., admin")
 
         self.host_entry.grid(row=5, column=0, sticky="ew", padx=(12, 6), pady=(0, 4))
         self.port_entry.grid(row=5, column=1, sticky="ew", padx=(6, 12), pady=(0, 4))
         self.user_entry.grid(row=7, column=0, sticky="ew", padx=(12, 6), pady=(0, 4))
         self.pass_entry.grid(row=7, column=1, sticky="ew", padx=(6, 12), pady=(0, 4))
-        self.db_entry.grid(row=9, column=0, columnspan=2, sticky="ew", padx=12, pady=(0, 6))
+        self.db_entry.grid(row=9, column=0, sticky="ew", padx=(12, 6), pady=(0, 6))
+        self.auth_source_entry.grid(row=9, column=1, sticky="ew", padx=(6, 12), pady=(0, 6))
 
         self.tls_chk = ctk.CTkCheckBox(self, text="TLS/SSL")
         self.tls_chk.grid(row=10, column=0, sticky="w", padx=12, pady=6)
@@ -78,7 +81,7 @@ class MongoSection(ctk.CTkFrame):
     def toggle_uri(self):
         use = self.use_uri.get() == 1
         self.uri_entry.configure(state="normal" if use else "disabled")
-        for w in (self.host_entry, self.port_entry, self.user_entry, self.pass_entry, self.db_entry, self.tls_chk):
+        for w in (self.host_entry, self.port_entry, self.user_entry, self.pass_entry, self.db_entry, self.auth_source_entry, self.tls_chk):
             w.configure(state="disabled" if use else "normal")
         if callable(self.on_change):
             self.on_change()
@@ -91,6 +94,7 @@ class MongoSection(ctk.CTkFrame):
             self.user_entry,
             self.pass_entry,
             self.db_entry,
+            self.auth_source_entry,
         ):
             w.delete(0, "end")
         self.tls_chk.deselect()
@@ -111,6 +115,7 @@ class MongoSection(ctk.CTkFrame):
                 user=self.user_entry.get().strip(),
                 pwd=self.pass_entry.get(),
                 db=self.db_entry.get().strip(),
+                auth_source=self.auth_source_entry.get().strip(),
                 tls=bool(self.tls_chk.get()),
             )
             dbname = ping_and_get_dbname(client)
@@ -138,6 +143,7 @@ class MongoSection(ctk.CTkFrame):
             "port": self.port_entry.get().strip(),
             "user": self.user_entry.get().strip(),
             "db": self.db_entry.get().strip(),
+            "auth_source": self.auth_source_entry.get().strip(),
             "tls": int(self.tls_chk.get() == 1),
             "remember_pwd": int(self.remember_pwd.get() == 1),
         }
@@ -154,6 +160,7 @@ class MongoSection(ctk.CTkFrame):
         self.port_entry.delete(0, "end"); self.port_entry.insert(0, data.get("port", ""))
         self.user_entry.delete(0, "end"); self.user_entry.insert(0, data.get("user", ""))
         self.db_entry.delete(0, "end");   self.db_entry.insert(0, data.get("db", ""))
+        self.auth_source_entry.delete(0, "end"); self.auth_source_entry.insert(0, data.get("auth_source", ""))
 
         if data.get("tls"): self.tls_chk.select()
         else: self.tls_chk.deselect()
