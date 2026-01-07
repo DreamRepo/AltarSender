@@ -3,6 +3,7 @@ from pathlib import Path
 from tkinter import filedialog
 from openpyxl import load_workbook
 import csv
+import json
 # pandas optional: not required for current readers (openpyxl/csv used)
 pd = None
 
@@ -510,17 +511,37 @@ class ExperimentSection(ctk.CTkFrame):
                 entry.configure(state=("normal" if save_var.get() else "disabled"))
                 btn.configure(state=("normal" if save_var.get() else "disabled"))
             # config controls
-            # show Flatten checkbox if config file is a JSON
-            if key == "config" and path and path.is_file() and path.suffix.lower() == ".json":
+            if key == "config" and path and path.is_file():
                 # decide next available row: 3 if sheet displayed, else 2
-                next_row_local = 3 if (self.sheet_menus[key].get().strip() and not (key in ("raw_data", "artifacts"))) else 2
-                flatten_var = ctk.BooleanVar(value=bool(self._config_settings.get("flatten", False)))
-                def on_flatten_toggle():
-                    self._config_settings["flatten"] = bool(flatten_var.get())
-                    if callable(self.on_change):
-                        self.on_change()
-                flatten_cb = ctk.CTkCheckBox(sec, text="Flatten", variable=flatten_var, command=on_flatten_toggle)
-                flatten_cb.grid(row=next_row_local, column=0, sticky="w", padx=8, pady=4)
+                has_sheet = bool(self.sheet_menus[key].get().strip())
+                next_row_local = 3 if has_sheet else 2
+                # Check if we have a CSV separator row
+                if path.suffix.lower() == ".csv":
+                    next_row_local += 1  # separator row is already there
+                
+                # show Flatten checkbox if config file is a JSON
+                if path.suffix.lower() == ".json":
+                    flatten_var = ctk.BooleanVar(value=bool(self._config_settings.get("flatten", False)))
+                    def on_flatten_toggle():
+                        self._config_settings["flatten"] = bool(flatten_var.get())
+                        self.render_details_sections()  # refresh preview
+                        if callable(self.on_change):
+                            self.on_change()
+                    flatten_cb = ctk.CTkCheckBox(sec, text="Flatten", variable=flatten_var, command=on_flatten_toggle)
+                    flatten_cb.grid(row=next_row_local, column=0, sticky="w", padx=8, pady=4)
+                    next_row_local += 1
+                
+                # Add config preview
+                ctk.CTkLabel(sec, text="Preview", font=("Segoe UI", 12, "bold")).grid(
+                    row=next_row_local, column=0, columnspan=2, sticky="w", padx=8, pady=(8, 2)
+                )
+                next_row_local += 1
+                
+                preview_text = self._read_config_preview(path, self.sheet_menus[key].get().strip())
+                preview_box = ctk.CTkTextbox(sec, height=150, width=300, wrap="none", font=("Consolas", 11))
+                preview_box.grid(row=next_row_local, column=0, columnspan=2, sticky="nsew", padx=8, pady=(2, 8))
+                preview_box.insert("1.0", preview_text)
+                preview_box.configure(state="disabled")  # read-only
             # metrics DataFrame controls
             if key == "metrics" and path and path.is_file():
                 col_names, data_rows = self._read_tabular(path, sheet)
@@ -675,4 +696,64 @@ class ExperimentSection(ctk.CTkFrame):
         self._metrics_settings["selected_cols"] = sel
         if callable(self.on_change):
             self.on_change()
+
+    def _flatten_dict(self, d: dict, parent_key: str = "", sep: str = "_") -> dict:
+        """Flatten a nested dictionary with keys joined by separator."""
+        items = []
+        for k, v in d.items():
+            new_key = f"{parent_key}{sep}{k}" if parent_key else k
+            if isinstance(v, dict):
+                items.extend(self._flatten_dict(v, new_key, sep).items())
+            elif isinstance(v, list):
+                # For lists, just keep them as-is
+                items.append((new_key, v))
+            else:
+                items.append((new_key, v))
+        return dict(items)
+
+    def _read_config_preview(self, path: Path, sheet: str = "", max_lines: int = 12) -> str:
+        """Read config file and return a formatted preview string."""
+        try:
+            suffix = path.suffix.lower()
+            if suffix == ".json":
+                with open(path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                # Apply flatten if enabled
+                if self._config_settings.get("flatten", False):
+                    data = self._flatten_dict(data)
+                # Format JSON with indentation
+                preview = json.dumps(data, indent=2, ensure_ascii=False)
+            elif suffix == ".csv":
+                sep = self._csv_separators.get("config", ",")
+                sep = "\t" if sep in ("\\t", "\t") else sep
+                lines = []
+                with open(path, "r", newline="", encoding="utf-8") as f:
+                    reader = csv.reader(f, delimiter=sep)
+                    for row in reader:
+                        lines.append(" │ ".join(str(c) for c in row))
+                preview = "\n".join(lines)
+            elif suffix in (".xlsx", ".xlsm"):
+                wb = load_workbook(filename=str(path), read_only=True, data_only=True)
+                ws = wb[sheet] if sheet and sheet in wb.sheetnames else wb[wb.sheetnames[0]]
+                lines = []
+                for row in ws.iter_rows(values_only=True):
+                    row_str = " │ ".join(str(c) if c is not None else "" for c in row)
+                    lines.append(row_str)
+                wb.close()
+                preview = "\n".join(lines)
+            else:
+                preview = "(Unsupported format)"
+            
+            # Truncate if too long
+            lines = preview.split("\n")
+            if len(lines) > max_lines:
+                preview = "\n".join(lines[:max_lines]) + f"\n... ({len(lines) - max_lines} more lines)"
+            
+            # Also limit total characters
+            if len(preview) > 1500:
+                preview = preview[:1500] + "\n... (truncated)"
+            
+            return preview
+        except Exception as e:
+            return f"(Error reading config: {e})"
 
