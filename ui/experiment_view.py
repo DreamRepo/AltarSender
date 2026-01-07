@@ -9,10 +9,11 @@ pd = None
 
 
 class ExperimentSection(ctk.CTkFrame):
-    def __init__(self, master, on_change=None, on_send=None):
+    def __init__(self, master, on_change=None, on_send=None, on_minio_toggle=None):
         super().__init__(master, corner_radius=12)
         self.on_change = on_change
         self.on_send = on_send
+        self.on_minio_toggle = on_minio_toggle
         self._selected_files: dict[str, set[str]] = {}
         self._metrics_settings: dict = {
             "header": True,
@@ -477,6 +478,8 @@ class ExperimentSection(ctk.CTkFrame):
                 send_var = ctk.BooleanVar(value=bool(self._raw_data_settings.get("send_minio", True)))
                 def on_send_toggle():
                     self._raw_data_settings["send_minio"] = bool(send_var.get())
+                    if callable(self.on_minio_toggle):
+                        self.on_minio_toggle(send_var.get())
                     if callable(self.on_change):
                         self.on_change()
                 send_cb = ctk.CTkCheckBox(sec, text="Send Minio", variable=send_var, command=on_send_toggle)

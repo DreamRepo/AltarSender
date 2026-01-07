@@ -38,17 +38,18 @@ class AppView(ctk.CTk):
         self.mongo_section = MongoSection(frm, on_save=self.save_prefs, on_change=lambda: self.after(10, self.fit_to_content))
         self.mongo_section.grid(row=0, column=0, sticky="nsew", padx=12, pady=(8, 8))
 
-        # --- EXPERIMENT FILES SECTION ---
-        self.exp_section = ExperimentSection(
-            frm,
-            on_change=lambda: self.after(0, self.fit_to_content),
-            on_send=self._on_send_experiment,
-        )
-        self.exp_section.grid(row=0, column=1, rowspan=20, sticky="nsew", padx=12, pady=(8, 8))
-
         # --- MINIO SECTION (below Mongo on the left) ---
         self.minio_section = MinioSection(frm, on_save=self.save_prefs, on_change=lambda: self.after(10, self.fit_to_content))
         self.minio_section.grid(row=1, column=0, sticky="nsew", padx=12, pady=(8, 8))
+
+        # --- EXPERIMENT FILES SECTION ---
+        self.exp_section = ExperimentSection(
+            frm,
+            on_change=self._on_experiment_change,
+            on_send=self._on_send_experiment,
+            on_minio_toggle=self._on_minio_toggle,
+        )
+        self.exp_section.grid(row=0, column=1, rowspan=20, sticky="nsew", padx=12, pady=(8, 8))
 
         # (button and status are now inside ExperimentSection)
 
@@ -99,6 +100,8 @@ class AppView(ctk.CTk):
         except Exception:
             pass
         self.minio_section.set_prefs(data, password_loader=lambda user: self.prefs.load_password_if_any(user=user))
+        # Set initial MinIO section visibility based on send_minio setting
+        self._on_minio_toggle(bool(data.get("raw_data_send_minio", 1)))
         self.after(10, self.fit_to_content)
 
     # --- Send experiment handler ---
@@ -230,6 +233,34 @@ class AppView(ctk.CTk):
             except Exception:
                 pass
         self.after(10, self.fit_to_content)
+
+    def _on_experiment_change(self):
+        """Handle experiment section changes and update MinIO visibility."""
+        self._on_minio_toggle()
+        self.after(0, self.fit_to_content)
+
+    def _on_minio_toggle(self, send_minio: bool = None):
+        """Show or hide the MinIO section based on send_minio setting and raw_data selection."""
+        try:
+            # Get current state from experiment section if not provided
+            if send_minio is None:
+                send_minio = self.exp_section._raw_data_settings.get("send_minio", True)
+            
+            # Check if raw_data is selected (not None or empty)
+            raw_data_name = self.exp_section.file_menus.get("raw_data", None)
+            has_raw_data = False
+            if raw_data_name:
+                val = (raw_data_name.get() or "").strip()
+                has_raw_data = bool(val) and val != "None"
+            
+            # Show MinIO section only if both conditions are met
+            if send_minio and has_raw_data:
+                self.minio_section.grid()
+            else:
+                self.minio_section.grid_remove()
+            self.after(10, self.fit_to_content)
+        except Exception:
+            pass
 
     def on_close(self):
         # Sauvegarde avant sortie

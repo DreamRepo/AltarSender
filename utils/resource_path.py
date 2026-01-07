@@ -35,3 +35,4 @@ def resource_path(relative_path: str) -> str:
     
     return os.path.join(base_path, relative_path)
 
+
