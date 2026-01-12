@@ -4,6 +4,10 @@ import json
 import os
 from services.hash import make_compact_uid_b32
 import re
+try:
+    import yaml
+except ImportError:
+    yaml = None
 
 
 def coerce_bool_option(value):
@@ -26,6 +30,13 @@ def format_config(experiment_folder, config):
         with open(file_path, "r", encoding="utf-8") as f:
             data = json.load(f)
         if config.get("options", {}).get("flatten"):
+            data = pd.json_normalize(data, sep="_").to_dict(orient="records")[0]
+    elif config_type in ("yaml", "yml"):
+        if yaml is None:
+            raise ValueError("PyYAML is not installed. Run: pip install pyyaml")
+        with open(file_path, "r", encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+        if config.get("options", {}).get("flatten") and isinstance(data, dict):
             data = pd.json_normalize(data, sep="_").to_dict(orient="records")[0]
     elif config_type == "xlsx" or config_type == "xlsm":
         data = pd.read_excel(file_path, sheet_name=config.get("sheet")).to_dict(orient="records")

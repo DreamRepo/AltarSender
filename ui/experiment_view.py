@@ -4,6 +4,10 @@ from tkinter import filedialog
 from openpyxl import load_workbook
 import csv
 import json
+try:
+    import yaml
+except ImportError:
+    yaml = None
 # pandas optional: not required for current readers (openpyxl/csv used)
 pd = None
 
@@ -38,7 +42,7 @@ class ExperimentSection(ctk.CTkFrame):
         # batch sending controls (not persisted)
         self._batch_enable = False
         self._batch_selected: set[str] = set()
-        self._allowed_tabular_suffixes = (".json", ".csv", ".xlsx", ".xlsm")
+        self._allowed_tabular_suffixes = (".json", ".csv", ".xlsx", ".xlsm", ".yaml", ".yml")
         self.grid_columnconfigure(0, weight=0)
         self.grid_columnconfigure(1, weight=1)
         self.grid_columnconfigure(2, weight=0)
@@ -66,14 +70,13 @@ class ExperimentSection(ctk.CTkFrame):
         ]
         for idx, (key, label) in enumerate(self._keys, start=2):
             ctk.CTkLabel(self, text=label).grid(row=idx, column=0, sticky="w", padx=12)
-            # For config: no "None" choice; others keep "None"
-            initial_values = [""] if key == "config" else ["None"]
+            initial_values = ["None"]
             file_menu = ctk.CTkOptionMenu(
                 self, values=initial_values, dynamic_resizing=False, width=320,
                 command=lambda v, k=key: self.on_file_changed(k, v)
             )
             file_menu.grid(row=idx, column=1, sticky="ew", padx=6, pady=6)
-            file_menu.set("" if key == "config" else "None")
+            file_menu.set("None")
             self.file_menus[key] = file_menu
 
             sheet_menu = ctk.CTkOptionMenu(self, values=[""], dynamic_resizing=False, width=200, command=lambda v, k=key: self.on_sheet_changed(k, v))
@@ -362,8 +365,7 @@ class ExperimentSection(ctk.CTkFrame):
                     filtered = [n for n in all_items if (base / n).is_file() and (base / n).suffix.lower() in self._allowed_tabular_suffixes]
                 except Exception:
                     filtered = []
-                # For config, remove the "None" option entirely
-                values = (filtered if key == "config" else ["None"] + filtered)
+                values = ["None"] + filtered
             else:
                 values = ["None"] + list(all_items)
 
@@ -373,11 +375,8 @@ class ExperimentSection(ctk.CTkFrame):
             except Exception:
                 pass
 
-            # Reset invalid current selections for restricted keys
-            if key == "config":
-                target_value = current if (current and current in values) else (values[0] if values else "")
-            else:
-                target_value = current if (current and current in values) else "None"
+            # Reset invalid current selections
+            target_value = current if (current and current in values) else "None"
             self.file_menus[key].set(target_value)
 
         # refresh details after items update
@@ -522,8 +521,8 @@ class ExperimentSection(ctk.CTkFrame):
                 if path.suffix.lower() == ".csv":
                     next_row_local += 1  # separator row is already there
                 
-                # show Flatten checkbox if config file is a JSON
-                if path.suffix.lower() == ".json":
+                # show Flatten checkbox if config file is a JSON or YAML
+                if path.suffix.lower() in (".json", ".yaml", ".yml"):
                     flatten_var = ctk.BooleanVar(value=bool(self._config_settings.get("flatten", False)))
                     def on_flatten_toggle():
                         self._config_settings["flatten"] = bool(flatten_var.get())
@@ -726,6 +725,17 @@ class ExperimentSection(ctk.CTkFrame):
                     data = self._flatten_dict(data)
                 # Format JSON with indentation
                 preview = json.dumps(data, indent=2, ensure_ascii=False)
+            elif suffix in (".yaml", ".yml"):
+                if yaml is None:
+                    preview = "(PyYAML not installed - run: pip install pyyaml)"
+                else:
+                    with open(path, "r", encoding="utf-8") as f:
+                        data = yaml.safe_load(f)
+                    # Apply flatten if enabled
+                    if self._config_settings.get("flatten", False) and isinstance(data, dict):
+                        data = self._flatten_dict(data)
+                    # Format as YAML
+                    preview = yaml.dump(data, default_flow_style=False, allow_unicode=True, sort_keys=False)
             elif suffix == ".csv":
                 sep = self._csv_separators.get("config", ",")
                 sep = "\t" if sep in ("\\t", "\t") else sep
