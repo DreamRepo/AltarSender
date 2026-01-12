@@ -20,11 +20,18 @@ def coerce_bool_option(value):
 def format_config(experiment_folder, config):
     # Return empty dict if no config file is selected
     config_name = config.get("name", "None") if isinstance(config, dict) else "None"
-    if not config_name or config_name == "None":
-        return {}
+    use_custom_path = config.get("use_custom_path", False) if isinstance(config, dict) else False
+    custom_path = config.get("custom_path", "") if isinstance(config, dict) else ""
     
-    file_path = os.path.join(experiment_folder, config_name)
-    config_type = config_name.split(".")[-1]
+    # Determine the file path based on mode
+    if use_custom_path and custom_path:
+        file_path = custom_path
+        config_type = custom_path.split(".")[-1].lower()
+    elif config_name and config_name != "None":
+        file_path = os.path.join(experiment_folder, config_name)
+        config_type = config_name.split(".")[-1].lower()
+    else:
+        return {}
     
     if config_type == "json":
         with open(file_path, "r", encoding="utf-8") as f:

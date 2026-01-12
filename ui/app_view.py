@@ -141,6 +141,8 @@ class AppView(ctk.CTk):
                     "config": {
                         "name": data.get("config_name", ""),
                         "sheet": data.get("config_sheet", ""),
+                        "use_custom_path": data.get("config_use_custom_path", 0),
+                        "custom_path": data.get("config_custom_path", ""),
                         "options": {
                             "flatten": data.get("config_flatten", 0),
                             "sep": data.get("config_sep", ","),
