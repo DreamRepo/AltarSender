@@ -36,24 +36,24 @@ def format_config(experiment_folder, config):
     if config_type == "json":
         with open(file_path, "r", encoding="utf-8") as f:
             data = json.load(f)
-        if config.get("options", {}).get("flatten"):
-            data = pd.json_normalize(data, sep="_").to_dict(orient="records")[0]
+    if config.get("options", {}).get("flatten"):
+        data = pd.json_normalize(data, sep="_").to_dict(orient="records")[0]
     elif config_type in ("yaml", "yml"):
         if yaml is None:
             raise ValueError("PyYAML is not installed. Run: pip install pyyaml")
         with open(file_path, "r", encoding="utf-8") as f:
             data = yaml.safe_load(f)
         if config.get("options", {}).get("flatten") and isinstance(data, dict):
-            data = pd.json_normalize(data, sep="_").to_dict(orient="records")[0]
-    elif config_type == "xlsx" or config_type == "xlsm":
-        data = pd.read_excel(file_path, sheet_name=config.get("sheet")).to_dict(orient="records")
+                data = pd.json_normalize(data, sep="_").to_dict(orient="records")[0]
+        elif config_type == "xlsx" or config_type == "xlsm":
+            data = pd.read_excel(file_path, sheet_name=config.get("sheet")).to_dict(orient="records")
     elif config_type == "csv":
         sep = (config.get("options", {}) or {}).get("sep", ",")
         sep = "\t" if sep == "\\t" else sep
         data = pd.read_csv(file_path, sep=sep).to_dict(orient="records")
     else:
         raise ValueError(f"Unsupported config type: {config_type}")
-    
+
     return data
 
 

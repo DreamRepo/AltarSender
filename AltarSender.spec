@@ -1,13 +1,37 @@
 # -*- mode: python ; coding: utf-8 -*-
+import sys
+import os
 from PyInstaller.utils.hooks import collect_all
 
-datas = [('C:\\Users\\WilliamGaultier\\Projets\\Altar\\AltarSender\\.venv\\Lib\\site-packages\\customtkinter', 'customtkinter')]
+# Find customtkinter path dynamically
+import customtkinter
+customtkinter_path = os.path.dirname(customtkinter.__file__)
+
+datas = [(customtkinter_path, 'customtkinter')]
 binaries = []
-hiddenimports = ['customtkinter', 'sacred', 'sacred.observers', 'pymongo', 'pandas', 'numpy', 'openpyxl', 'boto3', 'botocore', 'minio', 'PIL', 'PIL._tkinter_finder']
-tmp_ret = collect_all('customtkinter')
-datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
-tmp_ret = collect_all('sacred')
-datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
+hiddenimports = [
+    'customtkinter',
+    'sacred',
+    'sacred.observers',
+    'pymongo',
+    'pandas',
+    'numpy',
+    'openpyxl',
+    'boto3',
+    'botocore',
+    'minio',
+    'PIL',
+    'PIL._tkinter_finder',
+    'keyring',
+    'keyring.backends',
+]
+
+# Collect all data for these packages
+for package in ['customtkinter', 'sacred']:
+    tmp_ret = collect_all(package)
+    datas += tmp_ret[0]
+    binaries += tmp_ret[1]
+    hiddenimports += tmp_ret[2]
 
 
 a = Analysis(
@@ -23,6 +47,7 @@ a = Analysis(
     noarchive=False,
     optimize=0,
 )
+
 pyz = PYZ(a.pure)
 
 exe = EXE(
