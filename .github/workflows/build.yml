@@ -10,7 +10,6 @@ on:
       - '**.md'
       - 'LICENSE'
       - '.gitignore'
-      - 'experiments_example/**'
   pull_request:
     branches:
       - main
@@ -18,7 +17,6 @@ on:
       - '**.md'
       - 'LICENSE'
       - '.gitignore'
-      - 'experiments_example/**'
   workflow_dispatch:
 
 permissions:
@@ -44,8 +42,29 @@ jobs:
         pip install pyinstaller
     
     - name: Build executable
+      shell: bash
       run: |
-        pyinstaller AltarSender.spec
+        CTK_PATH=$(python -c "import customtkinter; import os; print(os.path.dirname(customtkinter.__file__))")
+        
+        pyinstaller --noconfirm --onefile --windowed \
+          --name "AltarSender" \
+          --add-data "${CTK_PATH};customtkinter" \
+          --hidden-import=customtkinter \
+          --hidden-import=sacred \
+          --hidden-import=sacred.observers \
+          --hidden-import=pymongo \
+          --hidden-import=pandas \
+          --hidden-import=numpy \
+          --hidden-import=openpyxl \
+          --hidden-import=boto3 \
+          --hidden-import=botocore \
+          --hidden-import=minio \
+          --hidden-import=PIL \
+          --hidden-import=PIL._tkinter_finder \
+          --hidden-import=yaml \
+          --collect-all=customtkinter \
+          --collect-all=sacred \
+          app.py
     
     - name: Upload artifact
       uses: actions/upload-artifact@v4
@@ -65,6 +84,10 @@ jobs:
       with:
         python-version: '3.11'
     
+    - name: Install Tk dependencies
+      run: |
+        brew install python-tk@3.11 || true
+    
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
@@ -73,7 +96,27 @@ jobs:
     
     - name: Build executable
       run: |
-        pyinstaller AltarSender.spec
+        CTK_PATH=$(python -c "import customtkinter; import os; print(os.path.dirname(customtkinter.__file__))")
+        
+        pyinstaller --noconfirm --onefile --windowed \
+          --name "AltarSender" \
+          --add-data "${CTK_PATH}:customtkinter" \
+          --hidden-import=customtkinter \
+          --hidden-import=sacred \
+          --hidden-import=sacred.observers \
+          --hidden-import=pymongo \
+          --hidden-import=pandas \
+          --hidden-import=numpy \
+          --hidden-import=openpyxl \
+          --hidden-import=boto3 \
+          --hidden-import=botocore \
+          --hidden-import=minio \
+          --hidden-import=PIL \
+          --hidden-import=PIL._tkinter_finder \
+          --hidden-import=yaml \
+          --collect-all=customtkinter \
+          --collect-all=sacred \
+          app.py
     
     - name: Upload artifact
       uses: actions/upload-artifact@v4
@@ -93,7 +136,7 @@ jobs:
       with:
         python-version: '3.11'
     
-    - name: Install system dependencies
+    - name: Install Tk dependencies
       run: |
         sudo apt-get update
         sudo apt-get install -y python3-tk
@@ -106,7 +149,27 @@ jobs:
     
     - name: Build executable
       run: |
-        pyinstaller AltarSender.spec
+        CTK_PATH=$(python -c "import customtkinter; import os; print(os.path.dirname(customtkinter.__file__))")
+        
+        pyinstaller --noconfirm --onefile --windowed \
+          --name "AltarSender" \
+          --add-data "${CTK_PATH}:customtkinter" \
+          --hidden-import=customtkinter \
+          --hidden-import=sacred \
+          --hidden-import=sacred.observers \
+          --hidden-import=pymongo \
+          --hidden-import=pandas \
+          --hidden-import=numpy \
+          --hidden-import=openpyxl \
+          --hidden-import=boto3 \
+          --hidden-import=botocore \
+          --hidden-import=minio \
+          --hidden-import=PIL \
+          --hidden-import=PIL._tkinter_finder \
+          --hidden-import=yaml \
+          --collect-all=customtkinter \
+          --collect-all=sacred \
+          app.py
     
     - name: Upload artifact
       uses: actions/upload-artifact@v4

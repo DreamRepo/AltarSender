@@ -382,7 +382,7 @@ class ExperimentSection(ctk.CTkFrame):
                 pass
 
             # Reset invalid current selections
-                target_value = current if (current and current in values) else "None"
+            target_value = current if (current and current in values) else "None"
             self.file_menus[key].set(target_value)
 
         # refresh details after items update
