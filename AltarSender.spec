@@ -1,42 +1,18 @@
 # -*- mode: python ; coding: utf-8 -*-
-import sys
-import os
 from PyInstaller.utils.hooks import collect_all
 
-# Find customtkinter path dynamically
-import customtkinter
-customtkinter_path = os.path.dirname(customtkinter.__file__)
-
-datas = [(customtkinter_path, 'customtkinter')]
+datas = [('.venv\\Lib\\site-packages\\customtkinter', 'customtkinter')]
 binaries = []
-hiddenimports = [
-    'customtkinter',
-    'sacred',
-    'sacred.observers',
-    'pymongo',
-    'pandas',
-    'numpy',
-    'openpyxl',
-    'boto3',
-    'botocore',
-    'minio',
-    'PIL',
-    'PIL._tkinter_finder',
-    'keyring',
-    'keyring.backends',
-]
-
-# Collect all data for these packages
-for package in ['customtkinter', 'sacred']:
-    tmp_ret = collect_all(package)
-    datas += tmp_ret[0]
-    binaries += tmp_ret[1]
-    hiddenimports += tmp_ret[2]
+hiddenimports = ['services.experiment_sender', 'services.format_content', 'services.hash', 'services.mongo_conn', 'services.prefs', 'services.raw_data_saver', 'ui.app_view', 'ui.experiment_view', 'ui.mongo_view', 'ui.minio_view', 'customtkinter', 'sacred', 'yaml']
+tmp_ret = collect_all('customtkinter')
+datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
+tmp_ret = collect_all('sacred')
+datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 
 
 a = Analysis(
     ['app.py'],
-    pathex=[],
+    pathex=['.'],
     binaries=binaries,
     datas=datas,
     hiddenimports=hiddenimports,
@@ -47,7 +23,6 @@ a = Analysis(
     noarchive=False,
     optimize=0,
 )
-
 pyz = PYZ(a.pure)
 
 exe = EXE(
@@ -63,7 +38,7 @@ exe = EXE(
     upx=True,
     upx_exclude=[],
     runtime_tmpdir=None,
-    console=False,
+    console=True,
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,

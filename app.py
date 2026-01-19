@@ -1,3 +1,10 @@
+import multiprocessing
+import sys
+
+# Required for PyInstaller to handle multiprocessing correctly
+if __name__ == "__main__":
+    multiprocessing.freeze_support()
+
 import customtkinter as ctk
 from ui.app_view import AppView
 

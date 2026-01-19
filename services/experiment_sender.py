@@ -1,5 +1,38 @@
 from __future__ import annotations
+import sys
+import os
+
+# Check if running in PyInstaller bundle
+_FROZEN = getattr(sys, 'frozen', False)
+
 import sacred
+# Disable source/dependency discovery globally for PyInstaller (no source files on disk)
+sacred.SETTINGS["DISCOVER_SOURCES"] = "none"
+sacred.SETTINGS["DISCOVER_DEPENDENCIES"] = "none"
+
+# Monkey-patch Source.create and MongoObserver.save_sources to handle missing files in PyInstaller
+if _FROZEN:
+    from sacred import dependencies
+    from sacred.observers import mongo as mongo_module
+    
+    # Patch Source.create
+    _original_source_create = dependencies.Source.create
+    
+    def _patched_source_create(filename, save_git_info=True):
+        if not filename or not os.path.exists(filename):
+            # Return a dummy Source instead of raising an error
+            return dependencies.Source(filename or "frozen_app", "frozen", None, None, False)
+        return _original_source_create(filename, save_git_info)
+    
+    dependencies.Source.create = staticmethod(_patched_source_create)
+    
+    # Patch MongoObserver.save_sources to skip missing files
+    def _patched_save_sources(self, ex_info):
+        # Return empty list - no sources to save in frozen app
+        return []
+    
+    mongo_module.MongoObserver.save_sources = _patched_save_sources
+
 from sacred import Experiment
 from sacred.observers import MongoObserver
 import numpy as np
@@ -55,7 +88,7 @@ def send_experiment(payload: Dict[str, Any]) -> Dict[str, Any]:
             arts = fc.format_raw_data(folder, base_artifacts)
             res = fc.format_results(folder, base_results)
             rawda = fc.format_raw_data(folder, base_raw_data)
-            ex = Experiment(experiment_name, save_git_info=True)
+            ex = Experiment(experiment_name, save_git_info=False)
             try:
                 ex.observers.append(MongoObserver(url=mongo_url, db_name=mongo_db))
             except Exception:
