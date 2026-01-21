@@ -162,9 +162,30 @@ class ExperimentSection(ctk.CTkFrame):
             ("raw_data", "Raw data"),
             ("artifacts", "Artifacts"),
         ]
+        
+        # Info tooltips for raw_data and artifacts
+        self._info_tooltips = {
+            "raw_data": "Files sent to MinIO or a local server.\nUse for large files (> 24 MB).",
+            "artifacts": "Files stored directly in MongoDB.\nUse for smaller files like images (< 24 MB).",
+        }
+        
         # Start from row 3 for the other selectors (config is at row 2)
         for idx, (key, label) in enumerate(self._keys[1:], start=3):  # Skip config
-            ctk.CTkLabel(self, text=label).grid(row=idx, column=0, sticky="w", padx=12)
+            # Create label frame for items that need info buttons
+            if key in self._info_tooltips:
+                label_frame = ctk.CTkFrame(self, fg_color="transparent")
+                label_frame.grid(row=idx, column=0, sticky="w", padx=12)
+                ctk.CTkLabel(label_frame, text=label).pack(side="left")
+                info_btn = ctk.CTkButton(
+                    label_frame, text="ℹ", width=20, height=20, 
+                    fg_color="gray", hover_color="#5a5a5a",
+                    font=("Segoe UI", 11),
+                    command=lambda k=key: self._show_info_tooltip(k)
+                )
+                info_btn.pack(side="left", padx=(4, 0))
+            else:
+                ctk.CTkLabel(self, text=label).grid(row=idx, column=0, sticky="w", padx=12)
+            
             initial_values = ["None"]
             file_menu = ctk.CTkOptionMenu(
                 self, values=initial_values, dynamic_resizing=False, width=320,
@@ -377,6 +398,41 @@ class ExperimentSection(ctk.CTkFrame):
                     self.on_change()
             cb = ctk.CTkCheckBox(self.batch_container, text=name, variable=var, command=_toggle)
             cb.grid(row=i, column=0, sticky="w", padx=8, pady=2)
+
+    # --- Info tooltip display ---
+    def _show_info_tooltip(self, key: str):
+        """Show an info dialog for the given selector key."""
+        info_text = self._info_tooltips.get(key, "")
+        if not info_text:
+            return
+        
+        # Create a small popup window
+        popup = ctk.CTkToplevel(self)
+        popup.title("Info")
+        popup.geometry("320x100")
+        popup.transient(self)
+        popup.grab_set()
+        
+        # Center on parent
+        popup.update_idletasks()
+        x = self.winfo_rootx() + 100
+        y = self.winfo_rooty() + 100
+        popup.geometry(f"+{x}+{y}")
+        
+        popup.grid_columnconfigure(0, weight=1)
+        popup.grid_rowconfigure(0, weight=1)
+        
+        # Message
+        msg_label = ctk.CTkLabel(popup, text=info_text, wraplength=280, justify="left")
+        msg_label.grid(row=0, column=0, padx=16, pady=(16, 8), sticky="nsew")
+        
+        # OK button
+        ok_btn = ctk.CTkButton(popup, text="OK", width=80, command=popup.destroy)
+        ok_btn.grid(row=1, column=0, pady=(0, 12))
+        
+        # Close on escape
+        popup.bind("<Escape>", lambda e: popup.destroy())
+        popup.focus_set()
 
     # --- Config source visibility ---
     def _update_config_selector_visibility(self):
