@@ -75,16 +75,95 @@ class ExperimentSection(ctk.CTkFrame):
             row=1, column=2, sticky="e", padx=(6, 12), pady=6
         )
 
-        self.file_menus: dict[str, ctk.CTkOptionMenu] = {}
-        self.sheet_menus: dict[str, ctk.CTkOptionMenu] = {}
+        # --- Config source selection (row 2) ---
+        ctk.CTkLabel(self, text="Config").grid(row=2, column=0, sticky="w", padx=12)
+        
+        # Frame for config source toggle and selector
+        self.config_row_frame = ctk.CTkFrame(self, fg_color="transparent")
+        self.config_row_frame.grid(row=2, column=1, columnspan=2, sticky="ew", padx=6, pady=6)
+        self.config_row_frame.grid_columnconfigure(1, weight=1)
+        
+        # Radio buttons for source selection
+        self.config_source_var = ctk.StringVar(value="folder")
+        
+        def on_config_source_change():
+            self._config_settings["use_custom_path"] = (self.config_source_var.get() == "custom")
+            self._update_config_selector_visibility()
+            self.render_details_sections()
+            if callable(self.on_change):
+                self.on_change()
+        
+        ctk.CTkRadioButton(
+            self.config_row_frame, text="From folder", variable=self.config_source_var, 
+            value="folder", command=on_config_source_change
+        ).grid(row=0, column=0, sticky="w", padx=(0, 8))
+        
+        ctk.CTkRadioButton(
+            self.config_row_frame, text="Custom path", variable=self.config_source_var,
+            value="custom", command=on_config_source_change
+        ).grid(row=0, column=1, sticky="w", padx=(0, 8))
+        
+        # Config file dropdown (for "From folder" mode)
+        self.config_file_menu = ctk.CTkOptionMenu(
+            self.config_row_frame, values=["None"], dynamic_resizing=False, width=250,
+            command=lambda v: self.on_file_changed("config", v)
+        )
+        self.config_file_menu.grid(row=1, column=0, columnspan=2, sticky="ew", padx=0, pady=(6, 0))
+        self.config_file_menu.set("None")
+        
+        # Config sheet menu (for Excel files)
+        self.config_sheet_menu = ctk.CTkOptionMenu(
+            self.config_row_frame, values=[""], dynamic_resizing=False, width=150,
+            command=lambda v: self.on_sheet_changed("config", v)
+        )
+        self.config_sheet_menu.grid(row=1, column=2, sticky="ew", padx=(6, 0), pady=(6, 0))
+        self.config_sheet_menu.grid_remove()
+        
+        # Custom path entry + browse (for "Custom path" mode)
+        self.config_custom_frame = ctk.CTkFrame(self.config_row_frame, fg_color="transparent")
+        self.config_custom_frame.grid(row=1, column=0, columnspan=3, sticky="ew", padx=0, pady=(6, 0))
+        self.config_custom_frame.grid_columnconfigure(0, weight=1)
+        self.config_custom_frame.grid_remove()  # Hidden by default
+        
+        self.config_custom_entry = ctk.CTkEntry(self.config_custom_frame, placeholder_text="Select a config file…")
+        self.config_custom_entry.grid(row=0, column=0, sticky="ew", padx=(0, 6))
+        
+        def choose_custom_config():
+            filetypes = [
+                ("Config files", "*.json *.yaml *.yml *.csv *.xlsx *.xlsm"),
+                ("JSON", "*.json"),
+                ("YAML", "*.yaml *.yml"),
+                ("CSV", "*.csv"),
+                ("Excel", "*.xlsx *.xlsm"),
+                ("All files", "*.*"),
+            ]
+            filepath = filedialog.askopenfilename(filetypes=filetypes)
+            if filepath:
+                self.config_custom_entry.delete(0, "end")
+                self.config_custom_entry.insert(0, filepath)
+                self._config_settings["custom_path"] = filepath
+                self.render_details_sections()
+                if callable(self.on_change):
+                    self.on_change()
+        
+        ctk.CTkButton(self.config_custom_frame, text="Browse…", width=90, command=choose_custom_config).grid(
+            row=0, column=1, sticky="e"
+        )
+
+        # Store references for the file_menus and sheet_menus dicts
+        self.file_menus: dict[str, ctk.CTkOptionMenu] = {"config": self.config_file_menu}
+        self.sheet_menus: dict[str, ctk.CTkOptionMenu] = {"config": self.config_sheet_menu}
+        
+        # --- Other selectors (results, metrics, raw_data, artifacts) ---
         self._keys = [
-            ("config", "Config"),
+            ("config", "Config"),  # Keep for compatibility but handled separately above
             ("results", "Results"),
             ("metrics", "Metrics"),
             ("raw_data", "Raw data"),
             ("artifacts", "Artifacts"),
         ]
-        for idx, (key, label) in enumerate(self._keys, start=2):
+        # Start from row 3 for the other selectors (config is at row 2)
+        for idx, (key, label) in enumerate(self._keys[1:], start=3):  # Skip config
             ctk.CTkLabel(self, text=label).grid(row=idx, column=0, sticky="w", padx=12)
             initial_values = ["None"]
             file_menu = ctk.CTkOptionMenu(
@@ -102,7 +181,8 @@ class ExperimentSection(ctk.CTkFrame):
 
         # container for dynamic per-selector sections (two-column layout, small margins)
         self.details_container = ctk.CTkFrame(self, corner_radius=12)
-        base_row = 2 + len(self._keys) + 1
+        # Row 0: title, Row 1: folder, Row 2: config, Rows 3-6: other selectors (4 items)
+        base_row = 3 + len(self._keys[1:]) + 1  # = 3 + 4 + 1 = 8
         self.details_container.grid(row=base_row, column=0, columnspan=3, sticky="nsew", padx=6, pady=(6, 6))
         self.details_container.grid_columnconfigure(0, weight=1)
         self.details_container.grid_columnconfigure(1, weight=1)
@@ -240,6 +320,9 @@ class ExperimentSection(ctk.CTkFrame):
         self._config_settings["flatten"] = bool(data.get("config_flatten", 0))
         self._config_settings["use_custom_path"] = bool(data.get("config_use_custom_path", 0))
         self._config_settings["custom_path"] = data.get("config_custom_path", "") or ""
+        # Update config source radio button and visibility
+        self.config_source_var.set("custom" if self._config_settings["use_custom_path"] else "folder")
+        self._update_config_selector_visibility()
         # restore raw_data settings
         self._raw_data_settings["send_minio"] = bool(data.get("raw_data_send_minio", 1))
         self._raw_data_settings["save_locally"] = bool(data.get("raw_data_save_locally", 0))
@@ -295,6 +378,23 @@ class ExperimentSection(ctk.CTkFrame):
             cb = ctk.CTkCheckBox(self.batch_container, text=name, variable=var, command=_toggle)
             cb.grid(row=i, column=0, sticky="w", padx=8, pady=2)
 
+    # --- Config source visibility ---
+    def _update_config_selector_visibility(self):
+        """Show either the folder dropdown or custom path entry based on source selection."""
+        use_custom = self._config_settings.get("use_custom_path", False)
+        if use_custom:
+            self.config_file_menu.grid_remove()
+            self.config_sheet_menu.grid_remove()
+            self.config_custom_frame.grid()
+            # Restore custom path if previously set
+            if self._config_settings.get("custom_path"):
+                self.config_custom_entry.delete(0, "end")
+                self.config_custom_entry.insert(0, self._config_settings.get("custom_path", ""))
+        else:
+            self.config_custom_frame.grid_remove()
+            self.config_file_menu.grid()
+            # Sheet menu visibility handled by update_sheet_menu_for
+
     # --- Events ---
     def choose_folder(self):
         folder = filedialog.askdirectory()
@@ -327,6 +427,13 @@ class ExperimentSection(ctk.CTkFrame):
             self.on_change()
 
     def get_full_path_for_key(self, key: str) -> Path | None:
+        # Special handling for config with custom path
+        if key == "config" and self._config_settings.get("use_custom_path", False):
+            custom_path = self._config_settings.get("custom_path", "")
+            if custom_path:
+                return Path(custom_path)
+            return None
+        
         base_folder = self.folder_entry.get().strip()
         name = self.file_menus[key].get().strip()
         if not base_folder or not name or name == "None":
@@ -404,17 +511,23 @@ class ExperimentSection(ctk.CTkFrame):
         return names
 
     def _render_config_card(self, idx: int, cols: int) -> int:
-        """Render the config card with mode toggle. Returns updated idx."""
+        """Render the config card with options and preview. Returns updated idx."""
         use_custom = self._config_settings.get("use_custom_path", False)
-        folder_name = (self.file_menus["config"].get() or "").strip()
-        custom_path = self._config_settings.get("custom_path", "")
         
-        # Determine if we should show the card
-        has_folder_file = folder_name and folder_name != "None"
-        has_custom_file = use_custom and custom_path and Path(custom_path).is_file()
+        # Determine which path to use
+        if use_custom:
+            custom_path = self._config_settings.get("custom_path", "")
+            path = Path(custom_path) if custom_path else None
+            display_name = Path(custom_path).name if custom_path else "(none)"
+        else:
+            folder_name = (self.file_menus["config"].get() or "").strip()
+            if not folder_name or folder_name == "None":
+                return idx  # No config selected, don't show card
+            path = self.get_full_path_for_key("config")
+            display_name = folder_name
         
-        # Always show config card to allow switching modes
-        if not has_folder_file and not use_custom:
+        # Don't show card if no valid file
+        if not path or not path.is_file():
             return idx
         
         r, c = divmod(idx, cols)
@@ -428,71 +541,14 @@ class ExperimentSection(ctk.CTkFrame):
         
         current_row = 1
         
-        # Mode toggle: From folder vs Custom path
-        ctk.CTkLabel(sec, text="Source").grid(row=current_row, column=0, sticky="w", padx=8, pady=4)
-        mode_frame = ctk.CTkFrame(sec, fg_color="transparent")
-        mode_frame.grid(row=current_row, column=1, sticky="w", padx=(6, 8), pady=4)
-        
-        mode_var = ctk.StringVar(value="custom" if use_custom else "folder")
-        
-        def on_mode_change():
-            self._config_settings["use_custom_path"] = (mode_var.get() == "custom")
-            self.render_details_sections()
-            if callable(self.on_change):
-                self.on_change()
-        
-        ctk.CTkRadioButton(mode_frame, text="From folder", variable=mode_var, value="folder", 
-                          command=on_mode_change).pack(side="left", padx=(0, 12))
-        ctk.CTkRadioButton(mode_frame, text="Custom path", variable=mode_var, value="custom",
-                          command=on_mode_change).pack(side="left")
+        # Show selected file
+        ctk.CTkLabel(sec, text="File").grid(row=current_row, column=0, sticky="w", padx=8, pady=4)
+        ctk.CTkLabel(sec, text=display_name).grid(row=current_row, column=1, sticky="w", padx=(6, 8), pady=4)
         current_row += 1
-        
-        # Determine which path to use for preview
-        if use_custom:
-            # Custom path mode - show file picker
-            ctk.CTkLabel(sec, text="Config file").grid(row=current_row, column=0, sticky="w", padx=8, pady=4)
-            path_entry = ctk.CTkEntry(sec, placeholder_text="Select a config file…")
-            path_entry.grid(row=current_row, column=1, sticky="ew", padx=(6, 8), pady=4)
-            if custom_path:
-                path_entry.insert(0, custom_path)
-            current_row += 1
-            
-            def choose_config_file():
-                filetypes = [
-                    ("Config files", "*.json *.yaml *.yml *.csv *.xlsx *.xlsm"),
-                    ("JSON", "*.json"),
-                    ("YAML", "*.yaml *.yml"),
-                    ("CSV", "*.csv"),
-                    ("Excel", "*.xlsx *.xlsm"),
-                    ("All files", "*.*"),
-                ]
-                filepath = filedialog.askopenfilename(filetypes=filetypes)
-                if filepath:
-                    path_entry.delete(0, "end")
-                    path_entry.insert(0, filepath)
-                    self._config_settings["custom_path"] = filepath
-                    self.render_details_sections()
-                    if callable(self.on_change):
-                        self.on_change()
-            
-            browse_btn = ctk.CTkButton(sec, text="Browse…", width=90, command=choose_config_file)
-            browse_btn.grid(row=current_row, column=1, sticky="e", padx=(6, 8), pady=(0, 4))
-            current_row += 1
-            
-            # Use custom path for preview
-            path = Path(custom_path) if custom_path else None
-        else:
-            # Folder mode - show selected file info
-            ctk.CTkLabel(sec, text="Selected file").grid(row=current_row, column=0, sticky="w", padx=8, pady=4)
-            ctk.CTkLabel(sec, text=folder_name if folder_name and folder_name != "None" else "(none)").grid(
-                row=current_row, column=1, sticky="w", padx=(6, 8), pady=4
-            )
-            current_row += 1
-            path = self.get_full_path_for_key("config")
         
         # Sheet selector for Excel files
         sheet = ""
-        if path and path.is_file() and path.suffix.lower() in (".xlsx", ".xlsm"):
+        if path.suffix.lower() in (".xlsx", ".xlsm"):
             sheet = (self.sheet_menus["config"].get() or "").strip()
             if sheet:
                 ctk.CTkLabel(sec, text="Sheet").grid(row=current_row, column=0, sticky="w", padx=8, pady=4)
@@ -500,7 +556,7 @@ class ExperimentSection(ctk.CTkFrame):
                 current_row += 1
         
         # CSV separator
-        if path and path.is_file() and path.suffix.lower() == ".csv":
+        if path.suffix.lower() == ".csv":
             ctk.CTkLabel(sec, text="Separator").grid(row=current_row, column=0, sticky="w", padx=8, pady=4)
             sep_menu = ctk.CTkOptionMenu(
                 sec, values=[",", ";", "|", "\\t"], dynamic_resizing=False,
@@ -513,29 +569,28 @@ class ExperimentSection(ctk.CTkFrame):
             current_row += 1
         
         # Flatten checkbox for JSON/YAML
-        if path and path.is_file() and path.suffix.lower() in (".json", ".yaml", ".yml"):
+        if path.suffix.lower() in (".json", ".yaml", ".yml"):
             flatten_var = ctk.BooleanVar(value=bool(self._config_settings.get("flatten", False)))
             def on_flatten_toggle():
                 self._config_settings["flatten"] = bool(flatten_var.get())
                 self.render_details_sections()
                 if callable(self.on_change):
                     self.on_change()
-            flatten_cb = ctk.CTkCheckBox(sec, text="Flatten", variable=flatten_var, command=on_flatten_toggle)
-            flatten_cb.grid(row=current_row, column=0, sticky="w", padx=8, pady=4)
+            flatten_cb = ctk.CTkCheckBox(sec, text="Flatten nested keys", variable=flatten_var, command=on_flatten_toggle)
+            flatten_cb.grid(row=current_row, column=0, columnspan=2, sticky="w", padx=8, pady=4)
             current_row += 1
         
         # Preview
-        if path and path.is_file():
-            ctk.CTkLabel(sec, text="Preview", font=("Segoe UI", 12, "bold")).grid(
-                row=current_row, column=0, columnspan=2, sticky="w", padx=8, pady=(8, 2)
-            )
-            current_row += 1
-            
-            preview_text = self._read_config_preview(path, sheet)
-            preview_box = ctk.CTkTextbox(sec, height=150, width=300, wrap="none", font=("Consolas", 11))
-            preview_box.grid(row=current_row, column=0, columnspan=2, sticky="nsew", padx=8, pady=(2, 8))
-            preview_box.insert("1.0", preview_text)
-            preview_box.configure(state="disabled")
+        ctk.CTkLabel(sec, text="Preview", font=("Segoe UI", 12, "bold")).grid(
+            row=current_row, column=0, columnspan=2, sticky="w", padx=8, pady=(8, 2)
+        )
+        current_row += 1
+        
+        preview_text = self._read_config_preview(path, sheet)
+        preview_box = ctk.CTkTextbox(sec, height=150, width=300, wrap="none", font=("Consolas", 11))
+        preview_box.grid(row=current_row, column=0, columnspan=2, sticky="nsew", padx=8, pady=(2, 8))
+        preview_box.insert("1.0", preview_text)
+        preview_box.configure(state="disabled")
         
         return idx + 1
 
