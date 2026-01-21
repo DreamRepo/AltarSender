@@ -4,12 +4,26 @@ from tkinter import filedialog
 from openpyxl import load_workbook
 import csv
 import json
+import traceback
 try:
     import yaml
 except ImportError:
     yaml = None
 # pandas optional: not required for current readers (openpyxl/csv used)
 pd = None
+
+
+def _format_error(e: Exception) -> str:
+    """Format exception for display in status label."""
+    return f"❌ {e.__class__.__name__}: {e}"
+
+
+def _log_error(e: Exception, context: str = ""):
+    """Log error with traceback to stderr."""
+    import sys
+    if context:
+        print(f"[ERROR] {context}", file=sys.stderr)
+    traceback.print_exception(type(e), e, e.__traceback__, file=sys.stderr)
 
 
 class ExperimentSection(ctk.CTkFrame):
@@ -118,8 +132,8 @@ class ExperimentSection(ctk.CTkFrame):
         actions_row = ctk.CTkFrame(self, fg_color="transparent")
         actions_row.grid(row=batch_row + 2, column=0, columnspan=3, sticky="ew", padx=6, pady=(0, 2))
         actions_row.grid_columnconfigure(2, weight=1)
-        send_btn = ctk.CTkButton(actions_row, text="Send experiment", width=180, height=36, command=self._on_send_click)
-        send_btn.grid(row=0, column=2, sticky="e", padx=(0, 6), pady=(2, 2))
+        self.send_btn = ctk.CTkButton(actions_row, text="Send experiment", width=180, height=36, command=self._on_send_click)
+        self.send_btn.grid(row=0, column=2, sticky="e", padx=(0, 6), pady=(2, 2))
 
         # status labels: one for file/cards errors, one for send result
         self.status = ctk.CTkLabel(self, text="", wraplength=520, justify="left")
@@ -131,8 +145,9 @@ class ExperimentSection(ctk.CTkFrame):
         try:
             if callable(self.on_send):
                 self.on_send()
-        except Exception:
-            pass
+        except Exception as e:
+            _log_error(e, "Error in send click handler")
+            self.send_status.configure(text=_format_error(e))
 
     # --- IO ---
     def get_prefs(self) -> dict:
@@ -172,18 +187,16 @@ class ExperimentSection(ctk.CTkFrame):
                     if parent and parent.exists():
                         # if no selection yet, default to all siblings
                         if not self._batch_selected:
-                            try:
-                                for d in parent.iterdir():
-                                    if d.is_dir() and not d.name.startswith("."):
-                                        self._batch_selected.add(d.name)
-                            except Exception:
-                                pass
+                            for d in parent.iterdir():
+                                if d.is_dir() and not d.name.startswith("."):
+                                    self._batch_selected.add(d.name)
                         for name in sorted(list(self._batch_selected)):
                             folders_list.append(str((parent / name).resolve()))
             else:
                 if base_folder:
                     folders_list = [str(Path(base_folder).resolve())]
-        except Exception:
+        except Exception as e:
+            _log_error(e, "Error computing experiment folders list")
             folders_list = [base_folder] if base_folder else []
         data["experiment_folders"] = folders_list
         return data
@@ -244,24 +257,15 @@ class ExperimentSection(ctk.CTkFrame):
     def _render_batch_checkboxes(self):
         # clear
         for child in list(self.batch_container.winfo_children() if hasattr(self, 'batch_container') else []):
-            try:
-                child.destroy()
-            except Exception:
-                pass
+            child.destroy()
         if not getattr(self, 'batch_container', None):
             return
         # Hide the container when disabled; show when enabled
         if not bool(self.batch_enable_var.get()):
-            try:
-                self.batch_container.grid_remove()
-            except Exception:
-                pass
+            self.batch_container.grid_remove()
             return
         else:
-            try:
-                self.batch_container.grid()
-            except Exception:
-                pass
+            self.batch_container.grid()
         # build siblings list
         base_folder = (self.folder_entry.get() or "").strip()
         siblings: list[str] = []
@@ -272,7 +276,8 @@ class ExperimentSection(ctk.CTkFrame):
                 if parent and parent.exists():
                     siblings = [d.name for d in parent.iterdir() if d.is_dir() and not d.name.startswith('.')]
                     siblings.sort(key=lambda n: n.lower())
-        except Exception:
+        except Exception as e:
+            _log_error(e, "Error listing sibling folders")
             siblings = []
         # default select all if nothing yet
         if not self._batch_selected:
@@ -369,17 +374,16 @@ class ExperimentSection(ctk.CTkFrame):
                 try:
                     base = Path(base_folder)
                     filtered = [n for n in all_items if (base / n).is_file() and (base / n).suffix.lower() in self._allowed_tabular_suffixes]
-                except Exception:
+                except Exception as e:
+                    _log_error(e, f"Error filtering files for {key}")
+                    self.status.configure(text=_format_error(e))
                     filtered = []
                 values = ["None"] + filtered
             else:
                 values = ["None"] + list(all_items)
 
             # Configure menu
-            try:
-                self.file_menus[key].configure(values=values)
-            except Exception:
-                pass
+            self.file_menus[key].configure(values=values)
 
             # Reset invalid current selections
             target_value = current if (current and current in values) else "None"
@@ -538,10 +542,7 @@ class ExperimentSection(ctk.CTkFrame):
     # --- Dynamic details per selector ---
     def render_details_sections(self):
         # clear any previous error message on each cards update
-        try:
-            self.status.configure(text="")
-        except Exception:
-            pass
+        self.status.configure(text="")
         # clear previous
         for child in list(self.details_container.winfo_children()):
             child.destroy()
@@ -778,10 +779,8 @@ class ExperimentSection(ctk.CTkFrame):
                 # unsupported -> empty
                 cols, rows = [], []
         except Exception as e:
-            try:
-                self.status.configure(text=f"Error reading metrics: {e}")
-            except Exception:
-                pass
+            _log_error(e, "Error reading tabular data")
+            self.status.configure(text=f"❌ Error reading metrics: {e}")
         return cols, rows
 
     def _on_sep_changed(self, key: str, display_value: str):

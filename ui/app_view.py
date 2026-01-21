@@ -5,6 +5,7 @@ from pathlib import Path
 from ui.mongo_view import MongoSection
 from ui.minio_view import MinioSection
 from ui.experiment_view import ExperimentSection
+from utils.error_dialog import show_error, format_error_message, log_error
 import threading
 
 
@@ -14,10 +15,7 @@ class AppView(ctk.CTk):
         self.title("AltarSender")
         # Window size will adapt to content via fit_to_content()
         # Start wider by default
-        try:
-            self.geometry("1200x800")
-        except Exception:
-            pass
+        self.geometry("1200x800")
 
         # Prefs (sauvegarde/restauration)
         self.prefs = Preferences()
@@ -90,27 +88,44 @@ class AppView(ctk.CTk):
         )
 
     def load_prefs(self):
-        data = self.prefs.load()
-        # delegate to sections
-        self.mongo_section.set_prefs(data, password_loader=lambda user: self.prefs.load_password_if_any(user=user))
-        self.exp_section.set_prefs(data)
-        # ensure experiment cards render on launch
         try:
+            data = self.prefs.load()
+            # delegate to sections
+            self.mongo_section.set_prefs(data, password_loader=lambda user: self.prefs.load_password_if_any(user=user))
+            self.exp_section.set_prefs(data)
+            # ensure experiment cards render on launch
             self.exp_section.render_details_sections()
-        except Exception:
-            pass
-        self.minio_section.set_prefs(data, password_loader=lambda user: self.prefs.load_password_if_any(user=user))
-        # Set initial MinIO section visibility based on send_minio setting
-        self._on_minio_toggle(bool(data.get("raw_data_send_minio", 1)))
-        self.after(10, self.fit_to_content)
+            self.minio_section.set_prefs(data, password_loader=lambda user: self.prefs.load_password_if_any(user=user))
+            # Set initial MinIO section visibility based on send_minio setting
+            self._on_minio_toggle(bool(data.get("raw_data_send_minio", 1)))
+            self.after(10, self.fit_to_content)
+        except Exception as e:
+            log_error(e, "Error loading preferences")
+            show_error(self, "Load Preferences Error", f"Could not load preferences: {e}", e)
 
     # --- Send experiment handler ---
     def _on_send_experiment(self):
         try:
             # persist current values first
             self.save_prefs()
-        except Exception:
-            pass
+        except Exception as e:
+            log_error(e, "Error saving preferences before send")
+        
+        # Check if MinIO is required but not validated
+        send_minio = self.exp_section._raw_data_settings.get("send_minio", False)
+        raw_data_name = self.exp_section.file_menus.get("raw_data", None)
+        has_raw_data = False
+        if raw_data_name:
+            val = (raw_data_name.get() or "").strip()
+            has_raw_data = bool(val) and val != "None"
+        
+        if send_minio and has_raw_data:
+            if not self.minio_section.is_connection_valid():
+                error_msg = "MinIO connection not validated. Please test the MinIO connection before sending."
+                self.exp_section.send_status.configure(text=f"❌ {error_msg}")
+                show_error(self, "MinIO Connection Required", error_msg)
+                return
+        
         # aggregate data
         data = self.prefs_dict()
         # Build structured payload with selectors grouped under experiment
@@ -185,15 +200,9 @@ class AppView(ctk.CTk):
 
         # produce payload and call service (non-blocking)
         try:
-            try:
-                self.exp_section.send_status.configure(text="Sending experiment…")
-            except Exception:
-                pass
-            try:
-                # disable button to avoid double-clicks
-                self.exp_section.send_btn.configure(state="disabled")
-            except Exception:
-                pass
+            self.exp_section.send_status.configure(text="Sending experiment…")
+            # disable button to avoid double-clicks
+            self.exp_section.send_btn.configure(state="disabled")
 
             def _worker():
                 res = None
@@ -202,38 +211,32 @@ class AppView(ctk.CTk):
                     res = send_experiment(payload)
                 except Exception as e:
                     err = e
+                    log_error(e, "Error in send_experiment")
 
                 def _update_ui():
-                    try:
-                        if err is not None:
-                            self.exp_section.send_status.configure(text=f"❌ Error: {err.__class__.__name__}: {err}")
+                    if err is not None:
+                        error_msg = format_error_message(err)
+                        self.exp_section.send_status.configure(text=error_msg)
+                        # Show detailed error dialog
+                        show_error(self, "Send Experiment Failed", str(err), err)
+                    else:
+                        if isinstance(res, dict) and res.get("ok"):
+                            self.exp_section.send_status.configure(text=f"✅ {res.get('message', 'OK')}")
                         else:
-                            if isinstance(res, dict) and res.get("ok"):
-                                self.exp_section.send_status.configure(text=f"✅ {res.get('message', 'OK')}")
-                            else:
-                                msg = (res.get("message") if isinstance(res, dict) else str(res)) or "Failed"
-                                self.exp_section.send_status.configure(text=f"❌ {msg}")
-                    except Exception:
-                        pass
-                    finally:
-                        try:
-                            self.exp_section.send_btn.configure(state="normal")
-                        except Exception:
-                            pass
-                        self.after(10, self.fit_to_content)
+                            msg = (res.get("message") if isinstance(res, dict) else str(res)) or "Failed"
+                            self.exp_section.send_status.configure(text=f"❌ {msg}")
+                    
+                    self.exp_section.send_btn.configure(state="normal")
+                    self.after(10, self.fit_to_content)
 
                 self.after(0, _update_ui)
 
             threading.Thread(target=_worker, daemon=True).start()
         except Exception as e:
-            try:
-                self.exp_section.send_status.configure(text=f"❌ Error: {e.__class__.__name__}: {e}")
-            except Exception:
-                pass
-            try:
-                self.exp_section.send_btn.configure(state="normal")
-            except Exception:
-                pass
+            log_error(e, "Error starting send thread")
+            self.exp_section.send_status.configure(text=format_error_message(e))
+            self.exp_section.send_btn.configure(state="normal")
+            show_error(self, "Send Error", str(e), e)
         self.after(10, self.fit_to_content)
 
     def _on_experiment_change(self):
@@ -261,8 +264,8 @@ class AppView(ctk.CTk):
             else:
                 self.minio_section.grid_remove()
             self.after(10, self.fit_to_content)
-        except Exception:
-            pass
+        except Exception as e:
+            log_error(e, "Error toggling MinIO section visibility")
 
     def on_close(self):
         # Sauvegarde avant sortie
@@ -283,10 +286,8 @@ class AppView(ctk.CTk):
             self.minsize(min_w, min_h)
             self.geometry(f"{new_w}x{new_h}")
             # adjust scrollable frame height so it doesn't reserve extra space
-            try:
-                self.content_frame.configure(height=max(min_h - 40, 400))
-            except Exception:
-                pass
-        except Exception:
-            pass
+            self.content_frame.configure(height=max(min_h - 40, 400))
+        except Exception as e:
+            # Window sizing errors are non-critical, just log them
+            log_error(e, "Error fitting window to content")
 

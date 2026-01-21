@@ -8,6 +8,9 @@ class MinioSection(ctk.CTkFrame):
         super().__init__(master, corner_radius=12)
         self.on_save = on_save
         self.on_change = on_change
+        # Track whether connection test passed
+        self._connection_valid = False
+        self._last_tested_config = None  # To detect config changes
 
         self.grid_columnconfigure(1, weight=1)
 
@@ -77,6 +80,18 @@ class MinioSection(ctk.CTkFrame):
     def get_secret(self) -> str:
         return self.secret_entry.get()
 
+    def is_connection_valid(self) -> bool:
+        """Check if the MinIO connection has been tested successfully."""
+        # If config changed since last test, connection is no longer valid
+        current_config = self._get_config_fingerprint()
+        if current_config != self._last_tested_config:
+            self._connection_valid = False
+        return self._connection_valid
+
+    def _get_config_fingerprint(self) -> str:
+        """Get a fingerprint of current config to detect changes."""
+        return f"{self.endpoint_entry.get()}|{self.access_key_entry.get()}|{self.bucket_entry.get()}|{self.tls_chk.get()}"
+
     # --- Actions ---
     def _build_urls(self) -> list[str]:
         endpoint = (self.endpoint_entry.get() or "").strip()
@@ -95,6 +110,7 @@ class MinioSection(ctk.CTkFrame):
     def test_connection(self):
         self.status.configure(text="Connecting to MinIO…")
         self.update_idletasks()
+        self._connection_valid = False  # Reset until proven valid
         urls = self._build_urls()
         if not urls:
             self.status.configure(text="⚠️ Missing MinIO endpoint.")
@@ -167,6 +183,8 @@ class MinioSection(ctk.CTkFrame):
                                 s3.delete_object(Bucket=bucket, Key=probe_key)
                             except Exception:
                                 pass
+                            self._connection_valid = True
+                            self._last_tested_config = self._get_config_fingerprint()
                             self.status.configure(text=f"✅ Can send to bucket '{bucket}' at {base}")
                             if callable(self.on_save):
                                 self.on_save()
@@ -179,12 +197,16 @@ class MinioSection(ctk.CTkFrame):
                             self.status.configure(text=f"❌ Cannot write to bucket '{bucket}' ({e.__class__.__name__}: {e})")
                     except Exception as e:
                         # boto3 not present or init failed; cannot verify auth write
-                        self.status.configure(text=f"✅ MinIO is reachable at {base} • Install boto3 to verify bucket access")
+                        # Mark as valid with warning - user takes responsibility
+                        self._connection_valid = True
+                        self._last_tested_config = self._get_config_fingerprint()
+                        self.status.configure(text=f"⚠️ MinIO is reachable at {base} • Install boto3 to verify bucket access")
                 else:
-                    # No credentials provided
-                    self.status.configure(text=f"✅ MinIO is reachable at {base} • Provide access/secret to verify bucket access")
+                    # No credentials provided - NOT valid for sending
+                    self.status.configure(text=f"⚠️ MinIO is reachable at {base} • Provide access/secret to verify bucket access")
             else:
-                self.status.configure(text=f"✅ MinIO is reachable at {base}")
+                # No bucket specified - NOT valid for sending
+                self.status.configure(text=f"⚠️ MinIO is reachable at {base} • Specify a bucket to send data")
             if callable(self.on_save):
                 self.on_save()
         else:
@@ -198,6 +220,8 @@ class MinioSection(ctk.CTkFrame):
         self.tls_chk.deselect()
         self.remember_chk.deselect()
         self.status.configure(text="")
+        self._connection_valid = False
+        self._last_tested_config = None
         if callable(self.on_change):
             self.on_change()
 

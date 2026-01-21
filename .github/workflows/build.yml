@@ -48,7 +48,18 @@ jobs:
         
         pyinstaller --noconfirm --onefile --windowed \
           --name "AltarSender" \
+          --paths "." \
           --add-data "${CTK_PATH};customtkinter" \
+          --hidden-import=services.experiment_sender \
+          --hidden-import=services.format_content \
+          --hidden-import=services.hash \
+          --hidden-import=services.mongo_conn \
+          --hidden-import=services.prefs \
+          --hidden-import=services.raw_data_saver \
+          --hidden-import=ui.app_view \
+          --hidden-import=ui.experiment_view \
+          --hidden-import=ui.mongo_view \
+          --hidden-import=ui.minio_view \
           --hidden-import=customtkinter \
           --hidden-import=sacred \
           --hidden-import=sacred.observers \
@@ -100,7 +111,18 @@ jobs:
         
         pyinstaller --noconfirm --onefile --windowed \
           --name "AltarSender" \
+          --paths "." \
           --add-data "${CTK_PATH}:customtkinter" \
+          --hidden-import=services.experiment_sender \
+          --hidden-import=services.format_content \
+          --hidden-import=services.hash \
+          --hidden-import=services.mongo_conn \
+          --hidden-import=services.prefs \
+          --hidden-import=services.raw_data_saver \
+          --hidden-import=ui.app_view \
+          --hidden-import=ui.experiment_view \
+          --hidden-import=ui.mongo_view \
+          --hidden-import=ui.minio_view \
           --hidden-import=customtkinter \
           --hidden-import=sacred \
           --hidden-import=sacred.observers \
@@ -151,9 +173,20 @@ jobs:
       run: |
         CTK_PATH=$(python -c "import customtkinter; import os; print(os.path.dirname(customtkinter.__file__))")
         
-        pyinstaller --noconfirm --onefile --windowed \
+        pyinstaller --noconfirm --onefile --console \
           --name "AltarSender" \
+          --paths "." \
           --add-data "${CTK_PATH}:customtkinter" \
+          --hidden-import=services.experiment_sender \
+          --hidden-import=services.format_content \
+          --hidden-import=services.hash \
+          --hidden-import=services.mongo_conn \
+          --hidden-import=services.prefs \
+          --hidden-import=services.raw_data_saver \
+          --hidden-import=ui.app_view \
+          --hidden-import=ui.experiment_view \
+          --hidden-import=ui.mongo_view \
+          --hidden-import=ui.minio_view \
           --hidden-import=customtkinter \
           --hidden-import=sacred \
           --hidden-import=sacred.observers \
@@ -170,6 +203,8 @@ jobs:
           --collect-all=customtkinter \
           --collect-all=sacred \
           app.py
+        
+        chmod +x dist/AltarSender
     
     - name: Upload artifact
       uses: actions/upload-artifact@v4

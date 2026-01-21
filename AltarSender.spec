@@ -3,7 +3,7 @@ from PyInstaller.utils.hooks import collect_all
 
 datas = [('.venv\\Lib\\site-packages\\customtkinter', 'customtkinter')]
 binaries = []
-hiddenimports = ['services.experiment_sender', 'services.format_content', 'services.hash', 'services.mongo_conn', 'services.prefs', 'services.raw_data_saver', 'ui.app_view', 'ui.experiment_view', 'ui.mongo_view', 'ui.minio_view', 'customtkinter', 'sacred', 'yaml']
+hiddenimports = ['services.experiment_sender', 'services.format_content', 'services.hash', 'services.mongo_conn', 'services.prefs', 'services.raw_data_saver', 'ui.app_view', 'ui.experiment_view', 'ui.mongo_view', 'ui.minio_view', 'utils.error_dialog', 'customtkinter', 'sacred', 'yaml']
 tmp_ret = collect_all('customtkinter')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 tmp_ret = collect_all('sacred')

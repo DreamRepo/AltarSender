@@ -91,8 +91,11 @@ def send_experiment(payload: Dict[str, Any]) -> Dict[str, Any]:
             ex = Experiment(experiment_name, save_git_info=False)
             try:
                 ex.observers.append(MongoObserver(url=mongo_url, db_name=mongo_db))
-            except Exception:
-                pass
+            except Exception as e:
+                import traceback
+                print(f"ERROR connecting to MongoDB: {e}", file=sys.stderr)
+                traceback.print_exc(file=sys.stderr)
+                raise RuntimeError(f"Failed to connect to MongoDB: {e}") from e
 
             @ex.main
             def run(_run, _mets=mets, _arts=arts, _folder=folder, _res=res):
@@ -111,29 +114,32 @@ def send_experiment(payload: Dict[str, Any]) -> Dict[str, Any]:
                         for column, series in columns_dict.items():
                             for value in series:
                                 _run.log_scalar(column, value)
-                try:
-                    config_arts = {}
-                    for a in _arts.values():
-                        src = a.get('source_path') if isinstance(a, dict) else str(a)
-                        name = a.get('new_name') if isinstance(a, dict) else None
-                        if not src:
-                            continue
-                        if os.path.exists(src):
+                config_arts = {}
+                for a in _arts.values():
+                    src = a.get('source_path') if isinstance(a, dict) else str(a)
+                    name = a.get('new_name') if isinstance(a, dict) else None
+                    if not src:
+                        continue
+                    if os.path.exists(src):
+                        try:
                             _run.add_artifact(src, name=name)
                             config_arts[a.get('minio_folder')] = name
-                        data_files['artifacts'] = config_arts
-                except Exception:
-                    pass
+                        except Exception as e:
+                            print(f"WARNING: Failed to add artifact {src}: {e}", file=sys.stderr)
+                data_files['artifacts'] = config_arts
 
-                try:
-                    if len(rawda) > 0:
+                if len(rawda) > 0:
+                    try:
                         rd_result, rd_config = save_raw_data(rawda, raw_data_save_options, payload.get("minio", {}) or {})
                         cfg['raw_data'] = rd_config
                         print(f"raw_data save: {rd_result}")
                         data_files['raw_data'] = rd_config
-
-                except Exception as e:
-                    print(f"ERROR saving raw_data: {e}")
+                    except Exception as e:
+                        import traceback
+                        print(f"ERROR saving raw_data: {e}", file=sys.stderr)
+                        traceback.print_exc(file=sys.stderr)
+                        # Re-raise with more context
+                        raise RuntimeError(f"Failed to save raw_data: {e}") from e
 
                 _run.info['dataFiles'] = data_files
                 _run.info['result'] = _res
