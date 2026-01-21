@@ -17,43 +17,111 @@ def coerce_bool_option(value):
         return 0
 
 
+def _parse_folder_name_with_pattern(folder_path: str, pattern: str) -> dict:
+    """Parse folder name using the given pattern and return extracted values.
+    
+    Pattern syntax:
+    - $variable$ - matches any characters (greedy minimal)
+    - $variable%N$ - matches exactly N characters
+    """
+    if not pattern or not folder_path:
+        return {}
+    
+    folder_name = os.path.basename(folder_path.replace("\\", "/"))
+    
+    # Extract variable definitions from pattern
+    # Format: $name$ or $name%length$
+    var_pattern = r'\$([^$%]+)(?:%(\d+))?\$'
+    variables = re.findall(var_pattern, pattern)
+    
+    if not variables:
+        return {}
+    
+    # Build regex from pattern by replacing $var$ or $var%N$ with named groups
+    regex_pattern = re.escape(pattern)
+    for var_name, length in variables:
+        if length:
+            # Exact length: match exactly N characters
+            escaped_var = re.escape(f"${var_name}%{length}$")
+            regex_pattern = regex_pattern.replace(escaped_var, f"(?P<{var_name}>.{{{length}}})")
+        else:
+            # No length: match any characters (non-greedy)
+            escaped_var = re.escape(f"${var_name}$")
+            regex_pattern = regex_pattern.replace(escaped_var, f"(?P<{var_name}>.+?)")
+    
+    # Try to match
+    try:
+        match = re.match(f"^{regex_pattern}$", folder_name)
+        if match:
+            return match.groupdict()
+    except re.error:
+        pass
+    
+    return {}
+
+
 def format_config(experiment_folder, config):
-    # Return empty dict if no config file is selected
+    """Format config from file and/or parsed folder values.
+    
+    Returns a dict that may include:
+    - Values from config file (JSON, YAML, CSV, Excel)
+    - Values parsed from folder name (if parse_from_folder is enabled)
+    """
+    data = {}
+    
     config_name = config.get("name", "None") if isinstance(config, dict) else "None"
     use_custom_path = config.get("use_custom_path", False) if isinstance(config, dict) else False
     custom_path = config.get("custom_path", "") if isinstance(config, dict) else ""
     
-    # Determine the file path based on mode
+    # Load config from file if specified
+    file_path = None
+    config_type = None
+    
     if use_custom_path and custom_path:
         file_path = custom_path
         config_type = custom_path.split(".")[-1].lower()
     elif config_name and config_name != "None":
         file_path = os.path.join(experiment_folder, config_name)
         config_type = config_name.split(".")[-1].lower()
-    else:
-        return {}
     
-    if config_type == "json":
-        with open(file_path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        if config.get("options", {}).get("flatten"):
-            data = pd.json_normalize(data, sep="_").to_dict(orient="records")[0]
-    elif config_type in ("yaml", "yml"):
-        if yaml is None:
-            raise ValueError("PyYAML is not installed. Run: pip install pyyaml")
-        with open(file_path, "r", encoding="utf-8") as f:
-            data = yaml.safe_load(f)
-        if config.get("options", {}).get("flatten") and isinstance(data, dict):
-            data = pd.json_normalize(data, sep="_").to_dict(orient="records")[0]
-    elif config_type == "xlsx" or config_type == "xlsm":
-        data = pd.read_excel(file_path, sheet_name=config.get("sheet")).to_dict(orient="records")
-    elif config_type == "csv":
-        sep = (config.get("options", {}) or {}).get("sep", ",")
-        sep = "\t" if sep == "\\t" else sep
-        data = pd.read_csv(file_path, sep=sep).to_dict(orient="records")
-    else:
-        raise ValueError(f"Unsupported config type: {config_type}")
-
+    if file_path and config_type:
+        if config_type == "json":
+            with open(file_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if config.get("options", {}).get("flatten"):
+                data = pd.json_normalize(data, sep="_").to_dict(orient="records")[0]
+        elif config_type in ("yaml", "yml"):
+            if yaml is None:
+                raise ValueError("PyYAML is not installed. Run: pip install pyyaml")
+            with open(file_path, "r", encoding="utf-8") as f:
+                data = yaml.safe_load(f)
+            if config.get("options", {}).get("flatten") and isinstance(data, dict):
+                data = pd.json_normalize(data, sep="_").to_dict(orient="records")[0]
+        elif config_type == "xlsx" or config_type == "xlsm":
+            data = pd.read_excel(file_path, sheet_name=config.get("sheet")).to_dict(orient="records")
+        elif config_type == "csv":
+            sep = (config.get("options", {}) or {}).get("sep", ",")
+            sep = "\t" if sep == "\\t" else sep
+            data = pd.read_csv(file_path, sep=sep).to_dict(orient="records")
+        else:
+            raise ValueError(f"Unsupported config type: {config_type}")
+    
+    # Parse folder name if enabled (this is done per-folder for batch mode)
+    if config.get("parse_from_folder") and config.get("folder_pattern"):
+        parsed_values = _parse_folder_name_with_pattern(experiment_folder, config.get("folder_pattern", ""))
+        if parsed_values:
+            # Merge parsed values into data (parsed values take precedence)
+            if isinstance(data, dict):
+                data.update(parsed_values)
+            elif isinstance(data, list):
+                # If data is a list (from CSV/Excel), add parsed values to each record
+                for record in data:
+                    if isinstance(record, dict):
+                        record.update(parsed_values)
+            else:
+                # data is empty or not a dict, just use parsed values
+                data = parsed_values
+    
     return data
 
 

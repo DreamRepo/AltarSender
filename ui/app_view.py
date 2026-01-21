@@ -162,6 +162,9 @@ class AppView(ctk.CTk):
                             "flatten": data.get("config_flatten", 0),
                             "sep": data.get("config_sep", ","),
                         },
+                        "parse_from_folder": data.get("config_parse_from_folder", 0),
+                        "folder_pattern": data.get("config_folder_pattern", ""),
+                        "parsed_folder_values": data.get("config_parsed_folder_values", {}),
                     },
                     "metrics": {
                         "name": data.get("metrics_name", ""),

@@ -43,6 +43,8 @@ class ExperimentSection(ctk.CTkFrame):
             "flatten": False,
             "use_custom_path": False,
             "custom_path": "",
+            "parse_from_folder": False,
+            "folder_pattern": "",
         }
         self._raw_data_settings: dict = {
             "send_minio": True,
@@ -75,13 +77,14 @@ class ExperimentSection(ctk.CTkFrame):
             row=1, column=2, sticky="e", padx=(6, 12), pady=6
         )
 
-        # --- Config source selection (row 2) ---
-        ctk.CTkLabel(self, text="Config").grid(row=2, column=0, sticky="w", padx=12)
+        # --- Config section in a card (row 2) ---
+        self.config_card = ctk.CTkFrame(self, corner_radius=10)
+        self.config_card.grid(row=2, column=0, columnspan=3, sticky="ew", padx=12, pady=6)
+        self.config_card.grid_columnconfigure(1, weight=1)
         
-        # Frame for config source toggle and selector
-        self.config_row_frame = ctk.CTkFrame(self, fg_color="transparent")
-        self.config_row_frame.grid(row=2, column=1, columnspan=2, sticky="ew", padx=6, pady=6)
-        self.config_row_frame.grid_columnconfigure(1, weight=1)
+        ctk.CTkLabel(self.config_card, text="Config", font=("Segoe UI", 14, "bold")).grid(
+            row=0, column=0, columnspan=3, sticky="w", padx=10, pady=(8, 6)
+        )
         
         # Radio buttons for source selection
         self.config_source_var = ctk.StringVar(value="folder")
@@ -93,35 +96,38 @@ class ExperimentSection(ctk.CTkFrame):
             if callable(self.on_change):
                 self.on_change()
         
-        ctk.CTkRadioButton(
-            self.config_row_frame, text="From folder", variable=self.config_source_var, 
-            value="folder", command=on_config_source_change
-        ).grid(row=0, column=0, sticky="w", padx=(0, 8))
+        source_frame = ctk.CTkFrame(self.config_card, fg_color="transparent")
+        source_frame.grid(row=1, column=0, columnspan=3, sticky="w", padx=10, pady=(0, 4))
         
         ctk.CTkRadioButton(
-            self.config_row_frame, text="Custom path", variable=self.config_source_var,
+            source_frame, text="From folder", variable=self.config_source_var, 
+            value="folder", command=on_config_source_change
+        ).pack(side="left", padx=(0, 16))
+        
+        ctk.CTkRadioButton(
+            source_frame, text="Custom path", variable=self.config_source_var,
             value="custom", command=on_config_source_change
-        ).grid(row=0, column=1, sticky="w", padx=(0, 8))
+        ).pack(side="left")
         
         # Config file dropdown (for "From folder" mode)
         self.config_file_menu = ctk.CTkOptionMenu(
-            self.config_row_frame, values=["None"], dynamic_resizing=False, width=250,
+            self.config_card, values=["None"], dynamic_resizing=False, width=300,
             command=lambda v: self.on_file_changed("config", v)
         )
-        self.config_file_menu.grid(row=1, column=0, columnspan=2, sticky="ew", padx=0, pady=(6, 0))
+        self.config_file_menu.grid(row=2, column=0, columnspan=2, sticky="ew", padx=10, pady=(0, 4))
         self.config_file_menu.set("None")
         
         # Config sheet menu (for Excel files)
         self.config_sheet_menu = ctk.CTkOptionMenu(
-            self.config_row_frame, values=[""], dynamic_resizing=False, width=150,
+            self.config_card, values=[""], dynamic_resizing=False, width=150,
             command=lambda v: self.on_sheet_changed("config", v)
         )
-        self.config_sheet_menu.grid(row=1, column=2, sticky="ew", padx=(6, 0), pady=(6, 0))
+        self.config_sheet_menu.grid(row=2, column=2, sticky="ew", padx=(6, 10), pady=(0, 4))
         self.config_sheet_menu.grid_remove()
         
         # Custom path entry + browse (for "Custom path" mode)
-        self.config_custom_frame = ctk.CTkFrame(self.config_row_frame, fg_color="transparent")
-        self.config_custom_frame.grid(row=1, column=0, columnspan=3, sticky="ew", padx=0, pady=(6, 0))
+        self.config_custom_frame = ctk.CTkFrame(self.config_card, fg_color="transparent")
+        self.config_custom_frame.grid(row=2, column=0, columnspan=3, sticky="ew", padx=10, pady=(0, 4))
         self.config_custom_frame.grid_columnconfigure(0, weight=1)
         self.config_custom_frame.grid_remove()  # Hidden by default
         
@@ -149,6 +155,31 @@ class ExperimentSection(ctk.CTkFrame):
         ctk.CTkButton(self.config_custom_frame, text="Browse…", width=90, command=choose_custom_config).grid(
             row=0, column=1, sticky="e"
         )
+        
+        # Parse config from folder name option
+        self.parse_folder_frame = ctk.CTkFrame(self.config_card, fg_color="transparent")
+        self.parse_folder_frame.grid(row=3, column=0, columnspan=3, sticky="w", padx=10, pady=(4, 8))
+        
+        self.parse_folder_var = ctk.BooleanVar(value=False)
+        
+        def on_parse_folder_toggle():
+            self._config_settings["parse_from_folder"] = bool(self.parse_folder_var.get())
+            self._update_parse_button_visibility()
+            self.render_details_sections()
+            if callable(self.on_change):
+                self.on_change()
+        
+        ctk.CTkCheckBox(
+            self.parse_folder_frame, text="Parse config from folder name", 
+            variable=self.parse_folder_var, command=on_parse_folder_toggle
+        ).pack(side="left")
+        
+        self.parse_pattern_btn = ctk.CTkButton(
+            self.parse_folder_frame, text="Define pattern…", width=110, 
+            command=self._open_folder_pattern_dialog
+        )
+        self.parse_pattern_btn.pack(side="left", padx=(8, 0))
+        self.parse_pattern_btn.pack_forget()  # Hidden by default
 
         # Store references for the file_menus and sheet_menus dicts
         self.file_menus: dict[str, ctk.CTkOptionMenu] = {"config": self.config_file_menu}
@@ -268,6 +299,13 @@ class ExperimentSection(ctk.CTkFrame):
         data["config_flatten"] = int(bool(self._config_settings.get("flatten", False)))
         data["config_use_custom_path"] = int(bool(self._config_settings.get("use_custom_path", False)))
         data["config_custom_path"] = self._config_settings.get("custom_path", "")
+        data["config_parse_from_folder"] = int(bool(self._config_settings.get("parse_from_folder", False)))
+        data["config_folder_pattern"] = self._config_settings.get("folder_pattern", "")
+        # Include parsed folder values if enabled
+        if self._config_settings.get("parse_from_folder", False):
+            data["config_parsed_folder_values"] = self._parse_folder_name()
+        else:
+            data["config_parsed_folder_values"] = {}
         # raw_data settings persistence
         data["raw_data_send_minio"] = int(bool(self._raw_data_settings.get("send_minio", True)))
         data["raw_data_save_locally"] = int(bool(self._raw_data_settings.get("save_locally", False)))
@@ -341,9 +379,14 @@ class ExperimentSection(ctk.CTkFrame):
         self._config_settings["flatten"] = bool(data.get("config_flatten", 0))
         self._config_settings["use_custom_path"] = bool(data.get("config_use_custom_path", 0))
         self._config_settings["custom_path"] = data.get("config_custom_path", "") or ""
+        self._config_settings["parse_from_folder"] = bool(data.get("config_parse_from_folder", 0))
+        self._config_settings["folder_pattern"] = data.get("config_folder_pattern", "") or ""
         # Update config source radio button and visibility
         self.config_source_var.set("custom" if self._config_settings["use_custom_path"] else "folder")
         self._update_config_selector_visibility()
+        # Update parse from folder checkbox and button visibility
+        self.parse_folder_var.set(self._config_settings["parse_from_folder"])
+        self._update_parse_button_visibility()
         # restore raw_data settings
         self._raw_data_settings["send_minio"] = bool(data.get("raw_data_send_minio", 1))
         self._raw_data_settings["save_locally"] = bool(data.get("raw_data_save_locally", 0))
@@ -399,6 +442,162 @@ class ExperimentSection(ctk.CTkFrame):
             cb = ctk.CTkCheckBox(self.batch_container, text=name, variable=var, command=_toggle)
             cb.grid(row=i, column=0, sticky="w", padx=8, pady=2)
 
+    # --- Folder pattern parsing ---
+    def _parse_folder_name(self) -> dict:
+        """Parse the folder name using the defined pattern and return extracted values.
+        
+        Pattern syntax:
+        - $variable$ - matches any characters (greedy minimal)
+        - $variable%N$ - matches exactly N characters (e.g., $date%8$ matches 8 chars)
+        """
+        pattern = self._config_settings.get("folder_pattern", "")
+        if not pattern:
+            return {}
+        
+        folder_path = self.folder_entry.get().strip()
+        if not folder_path:
+            return {}
+        
+        folder_name = Path(folder_path).name
+        
+        # Extract variable definitions from pattern (between $ signs)
+        # Format: $name$ or $name%length$
+        import re
+        var_pattern = r'\$([^$%]+)(?:%(\d+))?\$'
+        variables = re.findall(var_pattern, pattern)
+        
+        if not variables:
+            return {}
+        
+        # Build regex from pattern by replacing $var$ or $var%N$ with named groups
+        regex_pattern = re.escape(pattern)
+        for var_name, length in variables:
+            if length:
+                # Exact length: match exactly N characters
+                escaped_var = re.escape(f"${var_name}%{length}$")
+                regex_pattern = regex_pattern.replace(escaped_var, f"(?P<{var_name}>.{{{length}}})")
+            else:
+                # No length: match any characters (non-greedy)
+                escaped_var = re.escape(f"${var_name}$")
+                regex_pattern = regex_pattern.replace(escaped_var, f"(?P<{var_name}>.+?)")
+        
+        # Try to match
+        try:
+            match = re.match(f"^{regex_pattern}$", folder_name)
+            if match:
+                return match.groupdict()
+        except re.error:
+            pass
+        
+        return {}
+
+    def _open_folder_pattern_dialog(self):
+        """Open a dialog to define the folder name pattern."""
+        folder_path = self.folder_entry.get().strip()
+        folder_name = Path(folder_path).name if folder_path else "(no folder selected)"
+        
+        dialog = ctk.CTkToplevel(self)
+        dialog.title("Define Folder Pattern")
+        dialog.geometry("550x520")
+        dialog.transient(self)
+        dialog.grab_set()
+        
+        # Center on parent
+        dialog.update_idletasks()
+        x = self.winfo_rootx() + 50
+        y = self.winfo_rooty() + 50
+        dialog.geometry(f"+{x}+{y}")
+        
+        dialog.grid_columnconfigure(0, weight=1)
+        dialog.grid_rowconfigure(6, weight=1)
+        
+        # Explanation section
+        help_frame = ctk.CTkFrame(dialog, corner_radius=8)
+        help_frame.grid(row=0, column=0, sticky="ew", padx=16, pady=(16, 12))
+        help_frame.grid_columnconfigure(0, weight=1)
+        
+        ctk.CTkLabel(help_frame, text="📝 Pattern Syntax", font=("Segoe UI", 12, "bold")).grid(
+            row=0, column=0, sticky="w", padx=10, pady=(8, 4)
+        )
+        
+        help_text = (
+            "Use variables between $ signs to extract values from folder name:\n\n"
+            "  $variable$      → matches any text (flexible length)\n"
+            "  $variable%N$   → matches exactly N characters\n\n"
+            "Examples:\n"
+            "  Folder:    MyExp_20260121_v2\n"
+            "  Pattern:   $name$_$date%8$_v$ver$\n"
+            "  Result:     name=MyExp, date=20260121, ver=2"
+        )
+        help_label = ctk.CTkLabel(help_frame, text=help_text, font=("Consolas", 11), justify="left")
+        help_label.grid(row=1, column=0, sticky="w", padx=10, pady=(0, 8))
+        
+        # Folder name display
+        ctk.CTkLabel(dialog, text="Current folder name:", font=("Segoe UI", 12, "bold")).grid(
+            row=1, column=0, sticky="w", padx=16, pady=(8, 4)
+        )
+        folder_label = ctk.CTkLabel(dialog, text=folder_name, font=("Consolas", 12))
+        folder_label.grid(row=2, column=0, sticky="w", padx=16, pady=(0, 12))
+        
+        # Pattern input
+        ctk.CTkLabel(dialog, text="Your pattern:", font=("Segoe UI", 12, "bold")).grid(
+            row=3, column=0, sticky="w", padx=16, pady=(8, 4)
+        )
+        pattern_entry = ctk.CTkEntry(dialog, placeholder_text="e.g., $name$_$date%8$_v$version$")
+        pattern_entry.grid(row=4, column=0, sticky="ew", padx=16, pady=(0, 12))
+        
+        # Restore current pattern
+        current_pattern = self._config_settings.get("folder_pattern", "")
+        if current_pattern:
+            pattern_entry.insert(0, current_pattern)
+        
+        # Extracted values preview
+        ctk.CTkLabel(dialog, text="Extracted values:", font=("Segoe UI", 12, "bold")).grid(
+            row=5, column=0, sticky="nw", padx=16, pady=(8, 4)
+        )
+        preview_box = ctk.CTkTextbox(dialog, height=100, wrap="none", font=("Consolas", 11))
+        preview_box.grid(row=6, column=0, sticky="nsew", padx=16, pady=(0, 12))
+        
+        def update_preview(*args):
+            pattern = pattern_entry.get()
+            self._config_settings["folder_pattern"] = pattern
+            parsed = self._parse_folder_name()
+            
+            preview_box.configure(state="normal")
+            preview_box.delete("1.0", "end")
+            
+            if parsed:
+                preview_text = "\n".join(f"{k}: {v}" for k, v in parsed.items())
+                preview_box.insert("1.0", preview_text)
+            else:
+                if pattern:
+                    preview_box.insert("1.0", "(no match - check your pattern)")
+                else:
+                    preview_box.insert("1.0", "(enter a pattern above)")
+            
+            preview_box.configure(state="disabled")
+        
+        # Update preview on typing
+        pattern_entry.bind("<KeyRelease>", update_preview)
+        update_preview()  # Initial update
+        
+        # Buttons
+        btn_frame = ctk.CTkFrame(dialog, fg_color="transparent")
+        btn_frame.grid(row=7, column=0, sticky="e", padx=16, pady=(0, 16))
+        
+        def save_and_close():
+            self._config_settings["folder_pattern"] = pattern_entry.get()
+            self.render_details_sections()
+            if callable(self.on_change):
+                self.on_change()
+            dialog.destroy()
+        
+        ctk.CTkButton(btn_frame, text="Cancel", width=80, fg_color="gray", command=dialog.destroy).pack(side="left", padx=(0, 8))
+        ctk.CTkButton(btn_frame, text="Save", width=80, command=save_and_close).pack(side="left")
+        
+        dialog.bind("<Escape>", lambda e: dialog.destroy())
+        pattern_entry.focus_set()
+
     # --- Info tooltip display ---
     def _show_info_tooltip(self, key: str):
         """Show an info dialog for the given selector key."""
@@ -450,6 +649,13 @@ class ExperimentSection(ctk.CTkFrame):
             self.config_custom_frame.grid_remove()
             self.config_file_menu.grid()
             # Sheet menu visibility handled by update_sheet_menu_for
+
+    def _update_parse_button_visibility(self):
+        """Show or hide the parse pattern button based on checkbox state."""
+        if self._config_settings.get("parse_from_folder", False):
+            self.parse_pattern_btn.pack(side="left", padx=(8, 0))
+        else:
+            self.parse_pattern_btn.pack_forget()
 
     # --- Events ---
     def choose_folder(self):
@@ -569,6 +775,7 @@ class ExperimentSection(ctk.CTkFrame):
     def _render_config_card(self, idx: int, cols: int) -> int:
         """Render the config card with options and preview. Returns updated idx."""
         use_custom = self._config_settings.get("use_custom_path", False)
+        parse_from_folder = self._config_settings.get("parse_from_folder", False)
         
         # Determine which path to use
         if use_custom:
@@ -577,13 +784,16 @@ class ExperimentSection(ctk.CTkFrame):
             display_name = Path(custom_path).name if custom_path else "(none)"
         else:
             folder_name = (self.file_menus["config"].get() or "").strip()
-            if not folder_name or folder_name == "None":
-                return idx  # No config selected, don't show card
-            path = self.get_full_path_for_key("config")
-            display_name = folder_name
+            has_file = folder_name and folder_name != "None"
+            if not has_file and not parse_from_folder:
+                return idx  # No config selected and no folder parsing, don't show card
+            path = self.get_full_path_for_key("config") if has_file else None
+            display_name = folder_name if has_file else "(none)"
         
-        # Don't show card if no valid file
-        if not path or not path.is_file():
+        has_valid_file = path and path.is_file()
+        
+        # Show card if we have a file OR if parse_from_folder is enabled
+        if not has_valid_file and not parse_from_folder:
             return idx
         
         r, c = divmod(idx, cols)
@@ -597,14 +807,15 @@ class ExperimentSection(ctk.CTkFrame):
         
         current_row = 1
         
-        # Show selected file
-        ctk.CTkLabel(sec, text="File").grid(row=current_row, column=0, sticky="w", padx=8, pady=4)
-        ctk.CTkLabel(sec, text=display_name).grid(row=current_row, column=1, sticky="w", padx=(6, 8), pady=4)
-        current_row += 1
+        # Show selected file (only if we have one)
+        if has_valid_file:
+            ctk.CTkLabel(sec, text="File").grid(row=current_row, column=0, sticky="w", padx=8, pady=4)
+            ctk.CTkLabel(sec, text=display_name).grid(row=current_row, column=1, sticky="w", padx=(6, 8), pady=4)
+            current_row += 1
         
         # Sheet selector for Excel files
         sheet = ""
-        if path.suffix.lower() in (".xlsx", ".xlsm"):
+        if has_valid_file and path.suffix.lower() in (".xlsx", ".xlsm"):
             sheet = (self.sheet_menus["config"].get() or "").strip()
             if sheet:
                 ctk.CTkLabel(sec, text="Sheet").grid(row=current_row, column=0, sticky="w", padx=8, pady=4)
@@ -612,7 +823,7 @@ class ExperimentSection(ctk.CTkFrame):
                 current_row += 1
         
         # CSV separator
-        if path.suffix.lower() == ".csv":
+        if has_valid_file and path.suffix.lower() == ".csv":
             ctk.CTkLabel(sec, text="Separator").grid(row=current_row, column=0, sticky="w", padx=8, pady=4)
             sep_menu = ctk.CTkOptionMenu(
                 sec, values=[",", ";", "|", "\\t"], dynamic_resizing=False,
@@ -625,7 +836,7 @@ class ExperimentSection(ctk.CTkFrame):
             current_row += 1
         
         # Flatten checkbox for JSON/YAML
-        if path.suffix.lower() in (".json", ".yaml", ".yml"):
+        if has_valid_file and path.suffix.lower() in (".json", ".yaml", ".yml"):
             flatten_var = ctk.BooleanVar(value=bool(self._config_settings.get("flatten", False)))
             def on_flatten_toggle():
                 self._config_settings["flatten"] = bool(flatten_var.get())
@@ -636,17 +847,34 @@ class ExperimentSection(ctk.CTkFrame):
             flatten_cb.grid(row=current_row, column=0, columnspan=2, sticky="w", padx=8, pady=4)
             current_row += 1
         
-        # Preview
-        ctk.CTkLabel(sec, text="Preview", font=("Segoe UI", 12, "bold")).grid(
-            row=current_row, column=0, columnspan=2, sticky="w", padx=8, pady=(8, 2)
-        )
-        current_row += 1
+        # Show parsed values if pattern is set (parse option is in main UI now)
+        if self._config_settings.get("parse_from_folder", False) and self._config_settings.get("folder_pattern", ""):
+            parsed = self._parse_folder_name()
+            if parsed:
+                ctk.CTkLabel(sec, text="Parsed values", font=("Segoe UI", 12, "bold")).grid(
+                    row=current_row, column=0, columnspan=2, sticky="w", padx=8, pady=(8, 2)
+                )
+                current_row += 1
+                
+                parsed_text = "\n".join(f"{k}: {v}" for k, v in parsed.items())
+                parsed_box = ctk.CTkTextbox(sec, height=60, width=300, wrap="none", font=("Consolas", 11))
+                parsed_box.grid(row=current_row, column=0, columnspan=2, sticky="ew", padx=8, pady=(2, 4))
+                parsed_box.insert("1.0", parsed_text)
+                parsed_box.configure(state="disabled")
+                current_row += 1
         
-        preview_text = self._read_config_preview(path, sheet)
-        preview_box = ctk.CTkTextbox(sec, height=150, width=300, wrap="none", font=("Consolas", 11))
-        preview_box.grid(row=current_row, column=0, columnspan=2, sticky="nsew", padx=8, pady=(2, 8))
-        preview_box.insert("1.0", preview_text)
-        preview_box.configure(state="disabled")
+        # Preview (only if we have a valid file)
+        if has_valid_file:
+            ctk.CTkLabel(sec, text="Preview", font=("Segoe UI", 12, "bold")).grid(
+                row=current_row, column=0, columnspan=2, sticky="w", padx=8, pady=(8, 2)
+            )
+            current_row += 1
+            
+            preview_text = self._read_config_preview(path, sheet)
+            preview_box = ctk.CTkTextbox(sec, height=150, width=300, wrap="none", font=("Consolas", 11))
+            preview_box.grid(row=current_row, column=0, columnspan=2, sticky="nsew", padx=8, pady=(2, 8))
+            preview_box.insert("1.0", preview_text)
+            preview_box.configure(state="disabled")
         
         return idx + 1
 
