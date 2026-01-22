@@ -1,7 +1,7 @@
 # AltarSender — Experiment Sender to Sacred
 
 
-![Send from folder — overview](https://raw.githubusercontent.com/DreamRepo/AltarSender/main/assets/sender_overview.png)
+![Send from folder — overview](https://raw.githubusercontent.com/DreamRepo/AltarSender/refs/heads/main/assets/send_from_folder.png)
 
 
 [➡️ Download the latest release](https://github.com/DreamRepo/AltarSender/releases) for Windows, macOS, or Linux.
@@ -10,7 +10,7 @@ A graphical user interface (GUI) built with Python and CustomTkinter to send exp
 
 ---
 
-![AltarSender — app screenshot](https://raw.githubusercontent.com/DreamRepo/AltarSender/main/assets/sender_app.png)
+![AltarSender — app screenshot](https://raw.githubusercontent.com/DreamRepo/AltarSender/refs/heads/main/assets/snapshot_app.png)
 
 ## Quick guide: Sacred infrastructure (at a glance)
 
