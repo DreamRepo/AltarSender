@@ -1,13 +1,37 @@
 # AltarSender — Experiment Sender to Sacred
 
+
+![Send from folder — overview](https://raw.githubusercontent.com/DreamRepo/AltarSender/main/assets/sender_overview.png)
+
+
+[➡️ Download the latest release](https://github.com/DreamRepo/AltarSender/releases) for Windows, macOS, or Linux.
+
 A graphical user interface (GUI) built with Python and CustomTkinter to send experiment results to a MongoDB Sacred database. Optionally upload heavy files to MinIO or a local/network file path.
+
+---
+
+![AltarSender — app screenshot](https://raw.githubusercontent.com/DreamRepo/AltarSender/main/assets/sender_app.png)
+
+## Quick guide: Sacred infrastructure (at a glance)
+
+The simplest mapping to help you fill the app:
+
+| Field | What it means | Accepted formats |
+|---|---|---|
+| Config | Experimental parameters | JSON, CSV, Excel, YAML, or extraction from folder name |
+| Metrics | XY data points | CSV, Excel |
+| Artifacts | Small files (approx. <25 MB) | Any file (PNG, JPG, CSV, PDF, etc.) |
+| Raw data | Large files (approx. >25 MB) | Any file (PNG, JPG, CSV, PDF, etc.) |
+| Results | Performance numbers | JSON, CSV, Excel |
+
+Tip: MongoDB stores your metadata (config, results, metrics), while MinIO or your filesystem stores the large raw files.
 
 ---
 
 ## Features
 
 - Send experiment metadata (config, results, metrics) to MongoDB Sacred
-- Upload artifacts to MongoDB (files < 50MB)
+- Upload artifacts to MongoDB (files < 25 MB)
 - Upload raw data (large files) to MinIO S3 or filesystem paths
 - Batch send multiple experiments with the same folder structure
 - Visual mapping of experiment files to Sacred data types
@@ -18,10 +42,9 @@ A graphical user interface (GUI) built with Python and CustomTkinter to send exp
 
 - **Required:** Python 3.x installed
 - **Required:** MongoDB database running (locally or on a server)
-- **Recommended:** Omniboard connected to your database for visualization
 - **Optional:** MinIO server for large file storage
 
-> **Deployment instructions:** See [AltarDocker](../AltarDocker/DEPLOY.md) for setting up MongoDB, MinIO, and Omniboard.
+> **Deployment instructions:** See [Altar](dreamrepo.github.io/Altar) for setting up MongoDB and MiniIO.
 
 ---
 
